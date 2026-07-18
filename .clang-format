@@ -1,0 +1,18 @@
+---
+BasedOnStyle: Chromium       
+UseTab: Never
+ColumnLimit: 120
+IndentWidth: 2
+SortIncludes: false
+AccessModifierOffset: -2
+NamespaceIndentation: All
+PointerAlignment: Left
+RemoveBracesLLVM: true
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortBlocksOnASingleLine: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AlignAfterOpenBracket: Align
+AllowShortCaseLabelsOnASingleLine: true
+ReflowComments: false

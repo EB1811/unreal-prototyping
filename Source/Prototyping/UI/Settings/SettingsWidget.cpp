@@ -8,6 +8,7 @@
 #include "Components/Overlay.h"
 #include "Kismet/GameplayStatics.h"
 #include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
+#include "Prototyping/Framework/UtilFuncs.h"
 #include "Prototyping/UI/InGameControlHUD.h"
 
 void USettingsWidget::NativeOnInitialized() {
@@ -21,8 +22,7 @@ void USettingsWidget::NativeOnInitialized() {
 void USettingsWidget::RefreshUI() {}
 
 void USettingsWidget::UpdateUI() {
-  UControlHUDSubsystem* ControlHUDSubsystem = GetWorld()->GetSubsystem<UControlHUDSubsystem>();
-  check(ControlHUDSubsystem);
+  UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
   AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
   check(ControlHUD);
   ControlHUD->AddToRefreshingWidgets(this);

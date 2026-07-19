@@ -2,6 +2,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/World.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "ControlHUDSubsystem.generated.h"
 

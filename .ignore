@@ -1,4 +1,5 @@
 /.cache
+/.git
 /.vscode
 /Content
 /DerivedDataCache

@@ -3,7 +3,22 @@
 #include "Prototyping/UI/InGameHud/InGameHudWidget.h"
 #include "Prototyping/UI/PauseMenu/PauseMenuViewWidget.h"
 #include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
+#include "Components/PanelWidget.h"
 #include "TimerManager.h"
+
+inline auto IsWidgetChildOf(UWidget* Widget, UWidget* Parent) -> bool {
+  check(Widget);
+  check(Parent);
+  if (Widget == Parent) return true;
+
+  UWidget* CurrentParent = Widget->GetParent();
+  while (CurrentParent) {
+    if (CurrentParent == Parent) return true;
+    CurrentParent = CurrentParent->GetParent();
+  }
+
+  return false;
+}
 
 AInGameControlHUD::AInGameControlHUD() {
   HUDState = EHUDState::InGame;
@@ -47,6 +62,12 @@ void AInGameControlHUD::InitUIWidgets() {
   // PauseMenuViewWidget->InitUI(InUIInputActions);
 }
 
+inline FUIBehaviour* GetUIBehaviour(UUserWidget* Widget) {
+  FProperty* FUIBehaviourProp = Widget->GetClass()->FindPropertyByName("UIBehaviour");
+  if (!FUIBehaviourProp) return nullptr;
+
+  return FUIBehaviourProp->ContainerPtrToValuePtr<FUIBehaviour>(Widget);
+}
 void AInGameControlHUD::ShowWidget(UUserWidget* Widget) {
   if (!Widget) return;
 
@@ -58,24 +79,48 @@ void AInGameControlHUD::HideWidget(UUserWidget* Widget) {
   Widget->SetVisibility(ESlateVisibility::Hidden);
 }
 
-void AInGameControlHUD::AddToRefreshingWidgets(UUserWidget* Widget) {
-  FProperty* FUIBehaviourProp = Widget->GetClass()->FindPropertyByName("UIRefresh");
-  check(FUIBehaviourProp);
-  FUIRefresh* UIRefreshPtr = FUIBehaviourProp->ContainerPtrToValuePtr<FUIRefresh>(Widget);
-  check(UIRefreshPtr->RefreshTick);
+auto AInGameControlHUD::bUIAcceptingInput() const -> bool {
+  if (OpenedViewWidgets.IsEmpty()) return false;
+  if (HUDState == EHUDState::PlayingAnim) return false;
 
+  return true;
+}
+
+inline FUIActionable* GetUIActionable(UUserWidget* Widget) {
+  FProperty* UIActionableProp = Widget->GetClass()->FindPropertyByName("UIActionable");
+  if (!UIActionableProp) return nullptr;
+
+  return UIActionableProp->ContainerPtrToValuePtr<FUIActionable>(Widget);
+}
+void AInGameControlHUD::AdvanceUI() {
+  if (!bUIAcceptingInput()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  FUIActionable* ActionableWidget = GetUIActionable(TopWidget);
+  if (!ActionableWidget || !ActionableWidget->AdvanceUI) return;
+
+  ActionableWidget->AdvanceUI();
+}
+
+inline FUIRefresh* GetUIRefresh(UUserWidget* Widget) {
+  FProperty* UIRefreshProp = Widget->GetClass()->FindPropertyByName("UIRefresh");
+  if (!UIRefreshProp) return nullptr;
+
+  return UIRefreshProp->ContainerPtrToValuePtr<FUIRefresh>(Widget);
+}
+void AInGameControlHUD::AddToRefreshingWidgets(UUserWidget* Widget) {
   if (RefreshingWidgets.Contains(Widget)) return;
 
+  FUIRefresh* UIRefresh = GetUIRefresh(Widget);
+  check(UIRefresh && UIRefresh->RefreshTick);
   RefreshingWidgets.Add(Widget);
 }
 void AInGameControlHUD::TickRefreshingWidgets() {
   for (UUserWidget* Widget : RefreshingWidgets) {
-    FProperty* FUIBehaviourProp = Widget->GetClass()->FindPropertyByName("UIRefresh");
-    check(FUIBehaviourProp);
-    FUIRefresh* UIRefreshPtr = FUIBehaviourProp->ContainerPtrToValuePtr<FUIRefresh>(Widget);
-    check(UIRefreshPtr->RefreshTick);
+    FUIRefresh* UIRefresh = GetUIRefresh(Widget);
+    check(UIRefresh && UIRefresh->RefreshTick);
 
-    UIRefreshPtr->RefreshTick();
+    UIRefresh->RefreshTick();
   }
 }
 

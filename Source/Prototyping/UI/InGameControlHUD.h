@@ -40,6 +40,7 @@ public:
 
   void InitUIWidgets();  // * Some stuff needs to be set up after all unreal funcs are called.
 
+  // * Widget visibility and animation handling.
   void ShowWidget(class UUserWidget* Widget);
   void HideWidget(class UUserWidget* Widget);
   // FWidgetAnimationDynamicEvent UIShowAnimCompleteEvent;
@@ -54,6 +55,11 @@ public:
   UPROPERTY(EditAnywhere)
   TArray<class UUserWidget*> OpenedViewWidgets;
 
+  // * Widget input handling.
+  auto bUIAcceptingInput() const -> bool;
+  void AdvanceUI();
+
+  // * Widget refreshing timer.
   UPROPERTY(EditAnywhere)
   TArray<class UUserWidget*> RefreshingWidgets;
   void AddToRefreshingWidgets(class UUserWidget* Widget);
@@ -63,6 +69,7 @@ public:
   FTimerHandle TickRefreshingWidgetsTimerHandle;
   void TickRefreshingWidgets();
 
+  // * Menu opening and closing.
   UPROPERTY()
   class UInGameHudWidget* InGameHudWidget;
   UFUNCTION(BlueprintCallable)

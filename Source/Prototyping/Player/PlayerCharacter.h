@@ -26,7 +26,18 @@ public:
   class UInputMappingContext* InputContext;
   UPROPERTY(EditAnywhere)
   FInGameInputActions InGameInputActions;
+  UPROPERTY(EditAnywhere)
+  class UInputMappingContext* InUIInputContext;
+  UPROPERTY(EditAnywhere)
+  FInUIInputActions InUIInputActions;
 
+  // * Input functions
+  // In Game
   UFUNCTION(BlueprintCallable)
   void OpenPauseMenu(const FInputActionValue& Value);
+  // In UI
+  UFUNCTION(BlueprintCallable)
+  void AdvanceUI(const FInputActionValue& Value);
+  UFUNCTION(BlueprintCallable)
+  void UIDirectionalInputAction(const FInputActionValue& Value);
 };

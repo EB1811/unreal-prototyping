@@ -3,6 +3,7 @@
 #include "Prototyping/Framework/UtilFuncs.h"
 #include "Prototyping/UI/InGameHud/InGameHudWidget.h"
 #include "Prototyping/UI/PauseMenu/PauseMenuViewWidget.h"
+#include "Prototyping/UI/TestHudWidget.h"
 #include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
 #include "Components/PanelWidget.h"
 #include "TimerManager.h"
@@ -33,20 +34,6 @@ void AInGameControlHUD::BeginPlay() {
   check(ControlHUDSubsystem);
   ControlHUDSubsystem->RegisterHUD(this);
 
-  check(InGameHudWidgetClass);
-  check(PauseMenuViewWidgetClass);
-
-  InGameHudWidget = CreateWidget<UInGameHudWidget>(GetWorld(), InGameHudWidgetClass);
-  InGameHudWidget->AddToViewport(1);
-  InGameHudWidget->SetVisibility(ESlateVisibility::Hidden);
-
-  PauseMenuViewWidget = CreateWidget<UPauseMenuViewWidget>(GetWorld(), PauseMenuViewWidgetClass);
-  PauseMenuViewWidget->AddToViewport(50);
-  PauseMenuViewWidget->SetVisibility(ESlateVisibility::Collapsed);
-
-  InGameHudWidget->InitUI(InGameInputActions);
-  PauseMenuViewWidget->InitUI(InUIInputActions);
-
   const FInputModeGameOnly InputMode;
   GetOwningPlayerController()->SetInputMode(InputMode);
   GetOwningPlayerController()->SetShowMouseCursor(false);
@@ -62,8 +49,23 @@ void AInGameControlHUD::BeginPlay() {
 void AInGameControlHUD::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
 
 void AInGameControlHUD::InitUIWidgets() {
-  // InGameHudWidget->InitUI(InGameInputActions);
-  // PauseMenuViewWidget->InitUI(InUIInputActions);
+  check(InGameHudWidgetClass);
+  check(PauseMenuViewWidgetClass);
+
+  InGameHudWidget = CreateWidget<UInGameHudWidget>(GetWorld(), InGameHudWidgetClass);
+  InGameHudWidget->AddToViewport(1);
+  InGameHudWidget->SetVisibility(ESlateVisibility::Hidden);
+
+  PauseMenuViewWidget = CreateWidget<UPauseMenuViewWidget>(GetWorld(), PauseMenuViewWidgetClass);
+  PauseMenuViewWidget->AddToViewport(50);
+  PauseMenuViewWidget->SetVisibility(ESlateVisibility::Collapsed);
+
+  TestHudWidget = CreateWidget<UTestHudWidget>(GetWorld(), TestHudWidgetClass);
+  TestHudWidget->AddToViewport(100);
+  TestHudWidget->SetVisibility(ESlateVisibility::Collapsed);
+
+  InGameHudWidget->InitUI(InGameInputActions);
+  PauseMenuViewWidget->InitUI(InUIInputActions);
 }
 
 inline FUIBehaviour* GetUIBehaviour(UUserWidget* Widget) {
@@ -84,9 +86,6 @@ void AInGameControlHUD::ShowWidget(UUserWidget* Widget) {
 
     USoundBase* OpenSound = UIBehaviour->OpenSound;
     if (OpenSound) UGameplayStatics::PlaySound2D(this, OpenSound, 1.0f);
-
-    UE_LOG(LogTemp, Log, TEXT("ShowWidget: Playing show animation for widget %s"), *Widget->GetName());
-
     return;
   }
 
@@ -117,17 +116,22 @@ void AInGameControlHUD::HideWidget(UUserWidget* Widget) {
 void AInGameControlHUD::UIShowAnimComplete() {
   if (UIShowAnimCompleteFunc) UIShowAnimCompleteFunc();
 
-  UE_LOG(LogTemp, Log, TEXT("UIShowAnimComplete called"));
+  UE_LOG(LogTemp, Warning, TEXT("UIShowAnimComplete called"));
+  OpenTestHudWidgetView();
 }
 void AInGameControlHUD::UIHideAnimComplete() {
   if (UIHideAnimCompleteFunc) UIHideAnimCompleteFunc();
+
+  UE_LOG(LogTemp, Warning, TEXT("UIHideAnimComplete called"));
 }
 
 void AInGameControlHUD::OpenViewWidget(UUserWidget* Widget) {
   check(Widget);
 
+  UE_LOG(LogTemp, Warning, TEXT("OpenViewWidget: Opening widget %s"), *Widget->GetName());
+
   OpenedViewWidgets.Add(Widget);
-  if (HUDState == EHUDState::InGame) {
+  if (OpenedViewWidgets.Num() <= 1) {
     const FInputModeGameAndUI InputMode;
     GetOwningPlayerController()->SetInputMode(InputMode);
     GetOwningPlayerController()->SetShowMouseCursor(true);
@@ -138,6 +142,8 @@ void AInGameControlHUD::OpenViewWidget(UUserWidget* Widget) {
 void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
   check(Widget);
   if (!OpenedViewWidgets.Contains(Widget)) return;
+
+  UE_LOG(LogTemp, Warning, TEXT("CloseViewWidget: Closing widget %s"), *Widget->GetName());
 
   TArray<UUserWidget*> RefreshingWidgetToRemove;
   for (UUserWidget* RefreshingWidget : RefreshingWidgets)
@@ -156,7 +162,7 @@ void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
 
 auto AInGameControlHUD::bUIAcceptingInput() const -> bool {
   if (OpenedViewWidgets.IsEmpty()) return false;
-  if (HUDState == EHUDState::PlayingAnim) return false;
+  // if (HUDState == EHUDState::PlayingAnim) return false;
 
   return true;
 }
@@ -164,11 +170,22 @@ inline FUIActionable* GetUIActionable(UUserWidget* Widget) {
   return GetOptReflectedProp<FUIActionable>(Widget, "UIActionable");
 }
 void AInGameControlHUD::AdvanceUI() {
-  UUserWidget* TopWidget = OpenedViewWidgets.Last();
-  FUIActionable* ActionableWidget = GetUIActionable(TopWidget);
+  if (!bUIAcceptingInput()) return;
+
+  UE_LOG(LogTemp, Warning, TEXT("AInGameControlHUD::AdvanceUI called"));
+
+  FUIActionable* ActionableWidget = GetUIActionable(OpenedViewWidgets.Last());
   if (!ActionableWidget || !ActionableWidget->AdvanceUI) return;
 
   ActionableWidget->AdvanceUI();
+}
+void AInGameControlHUD::UIDirectionalInputAction(FVector2D Direction) {
+  if (!bUIAcceptingInput()) return;
+
+  FUIActionable* ActionableWidget = GetUIActionable(OpenedViewWidgets.Last());
+  if (!ActionableWidget || !ActionableWidget->DirectionalInput) return;
+
+  ActionableWidget->DirectionalInput(Direction);
 }
 
 inline FUIRefresh* GetUIRefresh(UUserWidget* Widget) { return GetOptReflectedProp<FUIRefresh>(Widget, "UIRefresh"); }
@@ -191,4 +208,21 @@ void AInGameControlHUD::TickRefreshingWidgets() {
 
 void AInGameControlHUD::ShowInGameHud() {}
 
-void AInGameControlHUD::OpenPauseMenuView() { OpenViewWidget(PauseMenuViewWidget); }
+void AInGameControlHUD::OpenPauseMenuView() {
+  check(PauseMenuViewWidget);
+  if (OpenedViewWidgets.Contains(PauseMenuViewWidget)) return;
+
+  PauseMenuViewWidget->UpdateUI({
+      .TestFloat = 42.0f,
+  });
+  PauseMenuViewWidget->RefreshUI();
+
+  OpenViewWidget(PauseMenuViewWidget);
+}
+
+void AInGameControlHUD::OpenTestHudWidgetView() {
+  check(TestHudWidget);
+  if (OpenedViewWidgets.Contains(TestHudWidget)) return;
+
+  OpenViewWidget(TestHudWidget);
+}

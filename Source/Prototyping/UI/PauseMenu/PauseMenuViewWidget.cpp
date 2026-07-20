@@ -21,6 +21,7 @@ void UPauseMenuViewWidget::SelectHoveredButton() {
   if (!HoveredButton) return;
 
   if (HoveredButton == ResumeButton) Resume();
+  else if (HoveredButton == SettingsButton) OpenSettings();
 }
 void UPauseMenuViewWidget::HoverButton(UButton* Button) {
   check(Button);
@@ -47,7 +48,7 @@ void UPauseMenuViewWidget::HoverNextButton(FVector2D Direction) {
     return;
   }
 
-  TArray<UButton*> Buttons = {ResumeButton};
+  TArray<UButton*> Buttons = {ResumeButton, SettingsButton};
   int32 CurrentIndex = Buttons.IndexOfByKey(HoveredButton);
   check(CurrentIndex != INDEX_NONE);
   int32 NextIndex = CurrentIndex + (Direction.X > 0 ? 1 : -1);
@@ -58,10 +59,10 @@ void UPauseMenuViewWidget::HoverNextButton(FVector2D Direction) {
 void UPauseMenuViewWidget::UnhoverButton() {
   if (!HoveredButton) return;
 
-  // FButtonStyle ButtonStyle = HoveredButton == ResumeButton ? SaveButton->GetStyle() : ResumeButton->GetStyle();
-  // ButtonStyle.SetNormal(ButtonStyle.Normal);
-  // HoveredButton->SetStyle(ButtonStyle);
-  // HoveredButton = nullptr;
+  FButtonStyle ButtonStyle = HoveredButton == ResumeButton ? SettingsButton->GetStyle() : ResumeButton->GetStyle();
+  ButtonStyle.SetNormal(ButtonStyle.Normal);
+  HoveredButton->SetStyle(ButtonStyle);
+  HoveredButton = nullptr;
 }
 
 void UPauseMenuViewWidget::Resume() {
@@ -94,7 +95,10 @@ void UPauseMenuViewWidget::InitUI(FInUIInputActions _InUIInputActions) {
   HoverButton(ResumeButton);
 }
 
-void UPauseMenuViewWidget::SetupUIActionable() {}
+void UPauseMenuViewWidget::SetupUIActionable() {
+  UIActionable.AdvanceUI = [this]() { SelectHoveredButton(); };
+  UIActionable.DirectionalInput = [this](FVector2D Direction) { HoverNextButton(Direction); };
+}
 void UPauseMenuViewWidget::SetupUIBehaviour() {
   UIBehaviour.ShowAnim = ShowAnim;
   UIBehaviour.HideAnim = HideAnim;

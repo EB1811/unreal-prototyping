@@ -12,6 +12,13 @@ class PROTOTYPING_API UTestHudWidget : public UUserWidget {
   GENERATED_BODY()
 
 public:
+  virtual void NativeOnInitialized() override;
+
   UPROPERTY(meta = (BindWidget))
   class UTextBlock* TestTextBlock;
+  UPROPERTY(meta = (BindWidget))
+  class UButton* TestButton;
+
+  UFUNCTION(BlueprintCallable)
+  void PressTestButton();
 };

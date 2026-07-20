@@ -27,6 +27,8 @@ public:
   TSubclassOf<class UInGameHudWidget> InGameHudWidgetClass;
   UPROPERTY(EditAnywhere, Category = "Widgets", meta = (DisplayPriority = 1))
   TSubclassOf<class UPauseMenuViewWidget> PauseMenuViewWidgetClass;
+  UPROPERTY(EditAnywhere, Category = "Widgets", meta = (DisplayPriority = 1))
+  TSubclassOf<class UTestHudWidget> TestHudWidgetClass;
 
   UPROPERTY(EditAnywhere)
   EHUDState HUDState;
@@ -62,6 +64,7 @@ public:
   // * Widget input handling.
   auto bUIAcceptingInput() const -> bool;
   void AdvanceUI();
+  void UIDirectionalInputAction(FVector2D Direction);
 
   // * Widget refreshing timer.
   UPROPERTY(EditAnywhere)
@@ -83,4 +86,9 @@ public:
   class UPauseMenuViewWidget* PauseMenuViewWidget;
   UFUNCTION(BlueprintCallable)
   void OpenPauseMenuView();
+
+  UPROPERTY()
+  class UTestHudWidget* TestHudWidget;
+  UFUNCTION(BlueprintCallable)
+  void OpenTestHudWidgetView();
 };

@@ -30,7 +30,11 @@ void USettingsWidget::UpdateUI() {
 
 void USettingsWidget::InitUI(FInUIInputActions _InUIInputActions) {}
 
-void USettingsWidget::SetupUIActionable() {}
+void USettingsWidget::SetupUIActionable() {
+  UIActionable.AdvanceUI = [this]() {
+    UE_LOG(LogTemp, Warning, TEXT("USettingsWidget::UIActionable.AdvanceUI called"));
+  };
+}
 void USettingsWidget::SetupUIBehaviour() {
   UIBehaviour.ShowAnim = ShowAnim;
   UIBehaviour.HideAnim = HideAnim;

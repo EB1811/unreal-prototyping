@@ -1,23 +1,20 @@
 #include "InGameControlHUD.h"
 #include "Logging/LogVerbosity.h"
+#include "Prototyping/Framework/UtilFuncs.h"
 #include "Prototyping/UI/InGameHud/InGameHudWidget.h"
 #include "Prototyping/UI/PauseMenu/PauseMenuViewWidget.h"
 #include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
 #include "Components/PanelWidget.h"
 #include "TimerManager.h"
 
-inline auto IsWidgetChildOf(UWidget* Widget, UWidget* Parent) -> bool {
+inline auto IsWidgetChildOf(UUserWidget* Widget, UUserWidget* Parent) -> bool {
   check(Widget);
   check(Parent);
   if (Widget == Parent) return true;
+  if (!Parent->WidgetTree) return false;
 
-  UWidget* CurrentParent = Widget->GetParent();
-  while (CurrentParent) {
-    if (CurrentParent == Parent) return true;
-    CurrentParent = CurrentParent->GetParent();
-  }
-
-  return false;
+  UWidget* FoundWidget = Parent->WidgetTree->FindWidget(Widget->GetFName());
+  return (FoundWidget == Widget);
 }
 
 AInGameControlHUD::AInGameControlHUD() {
@@ -50,6 +47,13 @@ void AInGameControlHUD::BeginPlay() {
   InGameHudWidget->InitUI(InGameInputActions);
   PauseMenuViewWidget->InitUI(InUIInputActions);
 
+  const FInputModeGameOnly InputMode;
+  GetOwningPlayerController()->SetInputMode(InputMode);
+  GetOwningPlayerController()->SetShowMouseCursor(false);
+
+  UIShowAnimCompleteEvent.BindDynamic(this, &AInGameControlHUD::UIShowAnimComplete);
+  UIHideAnimCompleteEvent.BindDynamic(this, &AInGameControlHUD::UIHideAnimComplete);
+
   GetWorld()->GetTimerManager().SetTimer(TickRefreshingWidgetsTimerHandle, this,
                                          &AInGameControlHUD::TickRefreshingWidgets, WidgetsRefreshInterval, true,
                                          WidgetsRefreshInterval);
@@ -63,20 +67,91 @@ void AInGameControlHUD::InitUIWidgets() {
 }
 
 inline FUIBehaviour* GetUIBehaviour(UUserWidget* Widget) {
-  FProperty* FUIBehaviourProp = Widget->GetClass()->FindPropertyByName("UIBehaviour");
-  if (!FUIBehaviourProp) return nullptr;
-
-  return FUIBehaviourProp->ContainerPtrToValuePtr<FUIBehaviour>(Widget);
+  return GetOptReflectedProp<FUIBehaviour>(Widget, "UIBehaviour");
 }
 void AInGameControlHUD::ShowWidget(UUserWidget* Widget) {
-  if (!Widget) return;
+  if (FUIBehaviour* UIBehaviour = GetUIBehaviour(Widget)) {
+    HUDState = EHUDState::PlayingAnim;
+    UIShowAnimCompleteFunc = [this]() { HUDState = EHUDState::FocusedMenu; };
+
+    check(UIBehaviour->ShowAnim);
+    UWidgetAnimation* ShowAnim = UIBehaviour->ShowAnim;
+    Widget->UnbindAllFromAnimationFinished(ShowAnim);
+    Widget->BindToAnimationFinished(ShowAnim, UIShowAnimCompleteEvent);
+
+    Widget->SetVisibility(ESlateVisibility::Visible);
+    Widget->PlayAnimation(ShowAnim, 0.0f, 1, EUMGSequencePlayMode::Forward, 1.0f);
+
+    USoundBase* OpenSound = UIBehaviour->OpenSound;
+    if (OpenSound) UGameplayStatics::PlaySound2D(this, OpenSound, 1.0f);
+
+    UE_LOG(LogTemp, Log, TEXT("ShowWidget: Playing show animation for widget %s"), *Widget->GetName());
+
+    return;
+  }
 
   Widget->SetVisibility(ESlateVisibility::Visible);
 }
 void AInGameControlHUD::HideWidget(UUserWidget* Widget) {
-  if (!Widget) return;
+  if (FUIBehaviour* UIBehaviour = GetUIBehaviour(Widget)) {
+    HUDState = EHUDState::PlayingAnim;
+    UIHideAnimCompleteFunc = [this, Widget]() {
+      HUDState = EHUDState::InGame;
+      Widget->SetVisibility(ESlateVisibility::Collapsed);
+    };
 
-  Widget->SetVisibility(ESlateVisibility::Hidden);
+    check(UIBehaviour->HideAnim);
+    UWidgetAnimation* HideAnim = UIBehaviour->HideAnim;
+    Widget->UnbindAllFromAnimationFinished(HideAnim);
+    Widget->BindToAnimationFinished(HideAnim, UIHideAnimCompleteEvent);
+    Widget->PlayAnimation(HideAnim, 0.0f, 1, EUMGSequencePlayMode::Forward, 1.0f);
+
+    USoundBase* HideSound = UIBehaviour->HideSound;
+    if (HideSound) UGameplayStatics::PlaySound2D(this, HideSound, 1.0f);
+
+    return;
+  }
+
+  Widget->SetVisibility(ESlateVisibility::Collapsed);
+}
+void AInGameControlHUD::UIShowAnimComplete() {
+  if (UIShowAnimCompleteFunc) UIShowAnimCompleteFunc();
+
+  UE_LOG(LogTemp, Log, TEXT("UIShowAnimComplete called"));
+}
+void AInGameControlHUD::UIHideAnimComplete() {
+  if (UIHideAnimCompleteFunc) UIHideAnimCompleteFunc();
+}
+
+void AInGameControlHUD::OpenViewWidget(UUserWidget* Widget) {
+  check(Widget);
+
+  OpenedViewWidgets.Add(Widget);
+  if (HUDState == EHUDState::InGame) {
+    const FInputModeGameAndUI InputMode;
+    GetOwningPlayerController()->SetInputMode(InputMode);
+    GetOwningPlayerController()->SetShowMouseCursor(true);
+  }
+
+  ShowWidget(Widget);
+}
+void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
+  check(Widget);
+  if (!OpenedViewWidgets.Contains(Widget)) return;
+
+  TArray<UUserWidget*> RefreshingWidgetToRemove;
+  for (UUserWidget* RefreshingWidget : RefreshingWidgets)
+    if (IsWidgetChildOf(RefreshingWidget, Widget)) RefreshingWidgetToRemove.Add(RefreshingWidget);
+  for (UUserWidget* RefreshingWidget : RefreshingWidgetToRemove) RefreshingWidgets.Remove(RefreshingWidget);
+
+  OpenedViewWidgets.Remove(Widget);
+  if (OpenedViewWidgets.IsEmpty()) {
+    const FInputModeGameOnly InputMode;
+    GetOwningPlayerController()->SetInputMode(InputMode);
+    GetOwningPlayerController()->SetShowMouseCursor(false);
+  }
+
+  HideWidget(Widget);
 }
 
 auto AInGameControlHUD::bUIAcceptingInput() const -> bool {
@@ -85,16 +160,10 @@ auto AInGameControlHUD::bUIAcceptingInput() const -> bool {
 
   return true;
 }
-
 inline FUIActionable* GetUIActionable(UUserWidget* Widget) {
-  FProperty* UIActionableProp = Widget->GetClass()->FindPropertyByName("UIActionable");
-  if (!UIActionableProp) return nullptr;
-
-  return UIActionableProp->ContainerPtrToValuePtr<FUIActionable>(Widget);
+  return GetOptReflectedProp<FUIActionable>(Widget, "UIActionable");
 }
 void AInGameControlHUD::AdvanceUI() {
-  if (!bUIAcceptingInput()) return;
-
   UUserWidget* TopWidget = OpenedViewWidgets.Last();
   FUIActionable* ActionableWidget = GetUIActionable(TopWidget);
   if (!ActionableWidget || !ActionableWidget->AdvanceUI) return;
@@ -102,12 +171,7 @@ void AInGameControlHUD::AdvanceUI() {
   ActionableWidget->AdvanceUI();
 }
 
-inline FUIRefresh* GetUIRefresh(UUserWidget* Widget) {
-  FProperty* UIRefreshProp = Widget->GetClass()->FindPropertyByName("UIRefresh");
-  if (!UIRefreshProp) return nullptr;
-
-  return UIRefreshProp->ContainerPtrToValuePtr<FUIRefresh>(Widget);
-}
+inline FUIRefresh* GetUIRefresh(UUserWidget* Widget) { return GetOptReflectedProp<FUIRefresh>(Widget, "UIRefresh"); }
 void AInGameControlHUD::AddToRefreshingWidgets(UUserWidget* Widget) {
   if (RefreshingWidgets.Contains(Widget)) return;
 
@@ -121,21 +185,10 @@ void AInGameControlHUD::TickRefreshingWidgets() {
     check(UIRefresh && UIRefresh->RefreshTick);
 
     UIRefresh->RefreshTick();
+    UE_LOG(LogTemp, Log, TEXT("TickRefreshingWidgets: Refreshed widget %s"), *Widget->GetName());
   }
 }
 
-void AInGameControlHUD::ShowInGameHud() {
-  if (!InGameHudWidget) return;
+void AInGameControlHUD::ShowInGameHud() {}
 
-  ShowWidget(InGameHudWidget);
-}
-
-void AInGameControlHUD::OpenPauseMenuView() {
-  if (!PauseMenuViewWidget) return;
-
-  const FInputModeGameAndUI InputMode;
-  GetOwningPlayerController()->SetInputMode(InputMode);
-  GetOwningPlayerController()->SetShowMouseCursor(true);
-
-  ShowWidget(PauseMenuViewWidget);
-}
+void AInGameControlHUD::OpenPauseMenuView() { OpenViewWidget(PauseMenuViewWidget); }

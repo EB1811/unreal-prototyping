@@ -90,6 +90,24 @@ inline void AddToStructPropertyValue(FStructProperty* StructProp,
   }
 }
 
+template <typename T>
+inline auto GetReflectedProp(UObject* Object, const FName& PropertyName) -> T* {
+  FProperty* Prop = Object->GetClass()->FindPropertyByName(PropertyName);
+  check(Prop);
+
+  T* PropValuePtr = Prop->ContainerPtrToValuePtr<T>(Object);
+  check(PropValuePtr);
+
+  return PropValuePtr;
+}
+template <typename T>
+inline auto GetOptReflectedProp(UObject* Object, const FName& PropertyName) -> T* {
+  FProperty* Prop = Object->GetClass()->FindPropertyByName(PropertyName);
+  if (!Prop) return nullptr;
+
+  return Prop->ContainerPtrToValuePtr<T>(Object);
+}
+
 inline FGameplayTagContainer StringTagsToContainer(const TArray<FName>& Tags) {
   TArray<FGameplayTag> TagsArray;
   TagsArray.Reserve(Tags.Num());

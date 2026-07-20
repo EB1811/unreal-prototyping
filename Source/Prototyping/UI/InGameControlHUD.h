@@ -43,17 +43,21 @@ public:
   // * Widget visibility and animation handling.
   void ShowWidget(class UUserWidget* Widget);
   void HideWidget(class UUserWidget* Widget);
-  // FWidgetAnimationDynamicEvent UIShowAnimCompleteEvent;
-  // UFUNCTION()
-  // void UIShowAnimComplete();
-  // TFunction<void()> UIShowAnimCompleteFunc;
-  // FWidgetAnimationDynamicEvent UIHideAnimCompleteEvent;
-  // UFUNCTION()
-  // void UIHideAnimComplete();
-  // TFunction<void()> UIHideAnimCompleteFunc;
+  FWidgetAnimationDynamicEvent UIShowAnimCompleteEvent;
+  UFUNCTION()
+  void UIShowAnimComplete();
+  TFunction<void()> UIShowAnimCompleteFunc;
+  FWidgetAnimationDynamicEvent UIHideAnimCompleteEvent;
+  UFUNCTION()
+  void UIHideAnimComplete();
+  TFunction<void()> UIHideAnimCompleteFunc;
 
+  // * Widget management.
   UPROPERTY(EditAnywhere)
   TArray<class UUserWidget*> OpenedViewWidgets;
+
+  void OpenViewWidget(class UUserWidget* Widget);
+  void CloseViewWidget(class UUserWidget* Widget);
 
   // * Widget input handling.
   auto bUIAcceptingInput() const -> bool;

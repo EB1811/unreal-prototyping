@@ -51,6 +51,7 @@ USTRUCT()
 struct FUIRefresh {
   GENERATED_BODY()
 
+  // ! Not implemented.
   float RefreshInterval;  // Optional custom refresh interval, if 0, will use default interval.
 
   TFunction<void()> RefreshTick;

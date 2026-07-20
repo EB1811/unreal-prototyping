@@ -14,6 +14,7 @@ void UPauseMenuViewWidget::NativeOnInitialized() {
   ResumeButton->OnHovered.AddDynamic(this, &UPauseMenuViewWidget::UnhoverButton);
 
   SetupUIActionable();
+  SetupUIBehaviour();
 }
 
 void UPauseMenuViewWidget::SelectHoveredButton() {
@@ -63,10 +64,14 @@ void UPauseMenuViewWidget::UnhoverButton() {
   // HoveredButton = nullptr;
 }
 
-void UPauseMenuViewWidget::Resume() { UE_LOG(LogTemp, Log, TEXT("Resume button clicked")); }
+void UPauseMenuViewWidget::Resume() {
+  UControlHUDSubsystem* ControlHUDSubsystem = GetWorld()->GetSubsystem<UControlHUDSubsystem>();
+  check(ControlHUDSubsystem);
+  AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
+  check(ControlHUD);
+  ControlHUD->CloseViewWidget(this);
+}
 void UPauseMenuViewWidget::OpenSettings() {
-  UE_LOG(LogTemp, Log, TEXT("Settings button clicked"));
-
   SettingsWidget->UpdateUI();
   SettingsWidget->RefreshUI();
 

@@ -11,8 +11,12 @@ enum class EHUDState : uint8 {
   InGame UMETA(DisplayName = "InGame"),
   Paused UMETA(DisplayName = "Paused"),
   FocusedMenu UMETA(DisplayName = "FocusedMenu"),
-  PlayingAnim UMETA(DisplayName = "PlayingAnimation"),
   GameOver UMETA(DisplayName = "GameOver"),
+};
+UENUM()
+enum class EHUDAnimState : uint8 {
+  None UMETA(DisplayName = "None"),
+  PlayingAnim UMETA(DisplayName = "PlayingAnim"),
 };
 
 UCLASS() class PROTOTYPING_API AInGameControlHUD : public AHUD {
@@ -32,6 +36,8 @@ public:
 
   UPROPERTY(EditAnywhere)
   EHUDState HUDState;
+  UPROPERTY(EditAnywhere)
+  EHUDAnimState HUDAnimState;
 
   UPROPERTY(EditAnywhere)
   FInGameInputActions InGameInputActions;

@@ -68,8 +68,7 @@ inline FUIBehaviour* GetUIBehaviour(UUserWidget* Widget) {
 }
 void AInGameControlHUD::ShowWidget(UUserWidget* Widget) {
   if (FUIBehaviour* UIBehaviour = GetUIBehaviour(Widget)) {
-    HUDState = EHUDState::PlayingAnim;
-    UIShowAnimCompleteFunc = [this]() { HUDState = EHUDState::FocusedMenu; };
+    HUDAnimState = EHUDAnimState::PlayingAnim;
 
     check(UIBehaviour->ShowAnim);
     UWidgetAnimation* ShowAnim = UIBehaviour->ShowAnim;
@@ -88,11 +87,8 @@ void AInGameControlHUD::ShowWidget(UUserWidget* Widget) {
 }
 void AInGameControlHUD::HideWidget(UUserWidget* Widget) {
   if (FUIBehaviour* UIBehaviour = GetUIBehaviour(Widget)) {
-    HUDState = EHUDState::PlayingAnim;
-    UIHideAnimCompleteFunc = [this, Widget]() {
-      HUDState = EHUDState::InGame;
-      Widget->SetVisibility(ESlateVisibility::Collapsed);
-    };
+    HUDAnimState = EHUDAnimState::PlayingAnim;
+    UIHideAnimCompleteFunc = [this, Widget]() { Widget->SetVisibility(ESlateVisibility::Collapsed); };
 
     check(UIBehaviour->HideAnim);
     UWidgetAnimation* HideAnim = UIBehaviour->HideAnim;
@@ -111,10 +107,14 @@ void AInGameControlHUD::HideWidget(UUserWidget* Widget) {
 void AInGameControlHUD::UIShowAnimComplete() {
   if (UIShowAnimCompleteFunc) UIShowAnimCompleteFunc();
 
+  HUDAnimState = EHUDAnimState::None;
+
   UE_LOG(LogTemp, Warning, TEXT("UIShowAnimComplete called"));
 }
 void AInGameControlHUD::UIHideAnimComplete() {
   if (UIHideAnimCompleteFunc) UIHideAnimCompleteFunc();
+
+  HUDAnimState = EHUDAnimState::None;
 
   UE_LOG(LogTemp, Warning, TEXT("UIHideAnimComplete called"));
 }
@@ -122,10 +122,10 @@ void AInGameControlHUD::UIHideAnimComplete() {
 void AInGameControlHUD::OpenViewWidget(UUserWidget* Widget) {
   check(Widget);
 
-  UE_LOG(LogTemp, Warning, TEXT("OpenViewWidget: Opening widget %s"), *Widget->GetName());
-
   OpenedViewWidgets.Add(Widget);
   if (OpenedViewWidgets.Num() <= 1) {
+    HUDState = EHUDState::FocusedMenu;
+
     const FInputModeGameAndUI InputMode;
     GetOwningPlayerController()->SetInputMode(InputMode);
     GetOwningPlayerController()->SetShowMouseCursor(true);
@@ -137,8 +137,6 @@ void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
   check(Widget);
   if (!OpenedViewWidgets.Contains(Widget)) return;
 
-  UE_LOG(LogTemp, Warning, TEXT("CloseViewWidget: Closing widget %s"), *Widget->GetName());
-
   TArray<UUserWidget*> RefreshingWidgetToRemove;
   for (UUserWidget* RefreshingWidget : RefreshingWidgets)
     if (IsWidgetChildOf(RefreshingWidget, Widget)) RefreshingWidgetToRemove.Add(RefreshingWidget);
@@ -146,6 +144,8 @@ void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
 
   OpenedViewWidgets.Remove(Widget);
   if (OpenedViewWidgets.IsEmpty()) {
+    HUDState = EHUDState::InGame;
+
     const FInputModeGameOnly InputMode;
     GetOwningPlayerController()->SetInputMode(InputMode);
     GetOwningPlayerController()->SetShowMouseCursor(false);
@@ -174,8 +174,6 @@ void AInGameControlHUD::AdvanceUI(UUserWidget* ActionableWidget) {
 void AInGameControlHUD::AdvanceUI() {
   if (OpenedViewWidgets.IsEmpty()) return;
 
-  UE_LOG(LogTemp, Warning, TEXT("AInGameControlHUD::AdvanceUI called"));
-
   UUserWidget* TopWidget = OpenedViewWidgets.Last();
   AdvanceUI(TopWidget);
 }
@@ -190,8 +188,6 @@ void AInGameControlHUD::UIDirectionalInputAction(FVector2D Direction, UUserWidge
 }
 void AInGameControlHUD::UIDirectionalInputAction(FVector2D Direction) {
   if (OpenedViewWidgets.IsEmpty()) return;
-
-  UE_LOG(LogTemp, Warning, TEXT("AInGameControlHUD::UIDirectionalInputAction called"));
 
   UUserWidget* TopWidget = OpenedViewWidgets.Last();
   UIDirectionalInputAction(Direction, TopWidget);

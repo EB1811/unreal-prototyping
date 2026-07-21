@@ -63,7 +63,9 @@ public:
 
   // * Widget input handling.
   auto bUIAcceptingInput() const -> bool;
+  void AdvanceUI(UUserWidget* ActionableWidget);
   void AdvanceUI();
+  void UIDirectionalInputAction(FVector2D Direction, UUserWidget* ActionableWidget);
   void UIDirectionalInputAction(FVector2D Direction);
 
   // * Widget refreshing timer.

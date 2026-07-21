@@ -29,11 +29,6 @@ void AInGameControlHUD::DrawHUD() { Super::DrawHUD(); }
 void AInGameControlHUD::BeginPlay() {
   Super::BeginPlay();
 
-  // Register this HUD with the ControlHUDSubsystem
-  UControlHUDSubsystem* ControlHUDSubsystem = GetWorld()->GetSubsystem<UControlHUDSubsystem>();
-  check(ControlHUDSubsystem);
-  ControlHUDSubsystem->RegisterHUD(this);
-
   const FInputModeGameOnly InputMode;
   GetOwningPlayerController()->SetInputMode(InputMode);
   GetOwningPlayerController()->SetShowMouseCursor(false);
@@ -117,7 +112,6 @@ void AInGameControlHUD::UIShowAnimComplete() {
   if (UIShowAnimCompleteFunc) UIShowAnimCompleteFunc();
 
   UE_LOG(LogTemp, Warning, TEXT("UIShowAnimComplete called"));
-  OpenTestHudWidgetView();
 }
 void AInGameControlHUD::UIHideAnimComplete() {
   if (UIHideAnimCompleteFunc) UIHideAnimCompleteFunc();
@@ -161,7 +155,6 @@ void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
 }
 
 auto AInGameControlHUD::bUIAcceptingInput() const -> bool {
-  if (OpenedViewWidgets.IsEmpty()) return false;
   // if (HUDState == EHUDState::PlayingAnim) return false;
 
   return true;
@@ -169,23 +162,39 @@ auto AInGameControlHUD::bUIAcceptingInput() const -> bool {
 inline FUIActionable* GetUIActionable(UUserWidget* Widget) {
   return GetOptReflectedProp<FUIActionable>(Widget, "UIActionable");
 }
-void AInGameControlHUD::AdvanceUI() {
+void AInGameControlHUD::AdvanceUI(UUserWidget* ActionableWidget) {
   if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->AdvanceUI();
+}
+void AInGameControlHUD::AdvanceUI() {
+  if (OpenedViewWidgets.IsEmpty()) return;
 
   UE_LOG(LogTemp, Warning, TEXT("AInGameControlHUD::AdvanceUI called"));
 
-  FUIActionable* ActionableWidget = GetUIActionable(OpenedViewWidgets.Last());
-  if (!ActionableWidget || !ActionableWidget->AdvanceUI) return;
-
-  ActionableWidget->AdvanceUI();
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  AdvanceUI(TopWidget);
 }
-void AInGameControlHUD::UIDirectionalInputAction(FVector2D Direction) {
+void AInGameControlHUD::UIDirectionalInputAction(FVector2D Direction, UUserWidget* ActionableWidget) {
   if (!bUIAcceptingInput()) return;
 
-  FUIActionable* ActionableWidget = GetUIActionable(OpenedViewWidgets.Last());
-  if (!ActionableWidget || !ActionableWidget->DirectionalInput) return;
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->DirectionalInput) return;
 
-  ActionableWidget->DirectionalInput(Direction);
+  UIActionable->DirectionalInput(Direction);
+}
+void AInGameControlHUD::UIDirectionalInputAction(FVector2D Direction) {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UE_LOG(LogTemp, Warning, TEXT("AInGameControlHUD::UIDirectionalInputAction called"));
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  UIDirectionalInputAction(Direction, TopWidget);
 }
 
 inline FUIRefresh* GetUIRefresh(UUserWidget* Widget) { return GetOptReflectedProp<FUIRefresh>(Widget, "UIRefresh"); }

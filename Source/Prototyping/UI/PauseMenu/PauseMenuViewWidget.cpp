@@ -1,4 +1,5 @@
 #include "PauseMenuViewWidget.h"
+#include "Prototyping/Framework/UtilFuncs.h"
 #include "Prototyping/UI/Settings/SettingsWidget.h"
 #include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
 #include "Prototyping/UI/InGameControlHUD.h"
@@ -66,20 +67,16 @@ void UPauseMenuViewWidget::UnhoverButton() {
 }
 
 void UPauseMenuViewWidget::Resume() {
-  UControlHUDSubsystem* ControlHUDSubsystem = GetWorld()->GetSubsystem<UControlHUDSubsystem>();
-  check(ControlHUDSubsystem);
+  UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
   AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
-  check(ControlHUD);
   ControlHUD->CloseViewWidget(this);
 }
 void UPauseMenuViewWidget::OpenSettings() {
   SettingsWidget->UpdateUI();
   SettingsWidget->RefreshUI();
 
-  UControlHUDSubsystem* ControlHUDSubsystem = GetWorld()->GetSubsystem<UControlHUDSubsystem>();
-  check(ControlHUDSubsystem);
+  UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
   AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
-  check(ControlHUD);
   ControlHUD->ShowWidget(SettingsWidget);
 }
 
@@ -96,7 +93,15 @@ void UPauseMenuViewWidget::InitUI(FInUIInputActions _InUIInputActions) {
 }
 
 void UPauseMenuViewWidget::SetupUIActionable() {
-  UIActionable.AdvanceUI = [this]() { SelectHoveredButton(); };
+  UIActionable.AdvanceUI = [this]() {
+    if (SettingsWidget->GetVisibility() == ESlateVisibility::Visible) {
+      UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
+      AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
+      ControlHUD->AdvanceUI(SettingsWidget);
+    } else {
+      SelectHoveredButton();
+    }
+  };
   UIActionable.DirectionalInput = [this](FVector2D Direction) { HoverNextButton(Direction); };
 }
 void UPauseMenuViewWidget::SetupUIBehaviour() {

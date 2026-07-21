@@ -63,16 +63,35 @@ public:
   // * Widget management.
   UPROPERTY(EditAnywhere)
   TArray<class UUserWidget*> OpenedViewWidgets;
-
   void OpenViewWidget(class UUserWidget* Widget);
   void CloseViewWidget(class UUserWidget* Widget);
 
   // * Widget input handling.
   auto bUIAcceptingInput() const -> bool;
-  void AdvanceUI(UUserWidget* ActionableWidget);
-  void AdvanceUI();
+  void AdvanceUIAction(UUserWidget* ActionableWidget);
+  void AdvanceUIAction();
+  void AdvanceUIHoldAction(UUserWidget* ActionableWidget);
+  void AdvanceUIHoldAction();
+  void RetractUIAction(UUserWidget* ActionableWidget);
+  void RetractUIAction();
+  void QuitUIAction(UUserWidget* ActionableWidget);
+  void QuitUIAction();
+  void UINumericInputAction(float Value, UUserWidget* ActionableWidget);
+  void UINumericInputAction(float Value);
   void UIDirectionalInputAction(FVector2D Direction, UUserWidget* ActionableWidget);
   void UIDirectionalInputAction(FVector2D Direction);
+  void UISideButton1Action(UUserWidget* ActionableWidget);
+  void UISideButton1Action();
+  void UISideButton2Action(UUserWidget* ActionableWidget);
+  void UISideButton2Action();
+  void UISideButton3Action(UUserWidget* ActionableWidget);
+  void UISideButton3Action();
+  void UISideButton4Action(UUserWidget* ActionableWidget);
+  void UISideButton4Action();
+  void UICycleLeftAction(UUserWidget* ActionableWidget);
+  void UICycleLeftAction();
+  void UICycleRightAction(UUserWidget* ActionableWidget);
+  void UICycleRightAction();
 
   // * Widget refreshing timer.
   UPROPERTY(EditAnywhere)

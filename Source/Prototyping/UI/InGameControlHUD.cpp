@@ -162,7 +162,7 @@ auto AInGameControlHUD::bUIAcceptingInput() const -> bool {
 inline FUIActionable* GetUIActionable(UUserWidget* Widget) {
   return GetOptReflectedProp<FUIActionable>(Widget, "UIActionable");
 }
-void AInGameControlHUD::AdvanceUI(UUserWidget* ActionableWidget) {
+void AInGameControlHUD::AdvanceUIAction(UUserWidget* ActionableWidget) {
   if (!bUIAcceptingInput()) return;
 
   check(ActionableWidget);
@@ -171,11 +171,71 @@ void AInGameControlHUD::AdvanceUI(UUserWidget* ActionableWidget) {
 
   UIActionable->AdvanceUI();
 }
-void AInGameControlHUD::AdvanceUI() {
+void AInGameControlHUD::AdvanceUIAction() {
   if (OpenedViewWidgets.IsEmpty()) return;
 
   UUserWidget* TopWidget = OpenedViewWidgets.Last();
-  AdvanceUI(TopWidget);
+  AdvanceUIAction(TopWidget);
+}
+void AInGameControlHUD::AdvanceUIHoldAction(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->AdvanceUIHold();
+}
+void AInGameControlHUD::AdvanceUIHoldAction() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  AdvanceUIHoldAction(TopWidget);
+}
+void AInGameControlHUD::RetractUIAction(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->RetractUI();
+}
+void AInGameControlHUD::RetractUIAction() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  RetractUIAction(TopWidget);
+}
+void AInGameControlHUD::QuitUIAction(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->QuitUI();
+}
+void AInGameControlHUD::QuitUIAction() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  QuitUIAction(TopWidget);
+}
+void AInGameControlHUD::UINumericInputAction(float Value, UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->NumericInput(Value);
+}
+void AInGameControlHUD::UINumericInputAction(float Value) {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  UINumericInputAction(Value, TopWidget);
 }
 void AInGameControlHUD::UIDirectionalInputAction(FVector2D Direction, UUserWidget* ActionableWidget) {
   if (!bUIAcceptingInput()) return;
@@ -191,6 +251,96 @@ void AInGameControlHUD::UIDirectionalInputAction(FVector2D Direction) {
 
   UUserWidget* TopWidget = OpenedViewWidgets.Last();
   UIDirectionalInputAction(Direction, TopWidget);
+}
+void AInGameControlHUD::UISideButton1Action(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->SideButton1();
+}
+void AInGameControlHUD::UISideButton1Action() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  UISideButton1Action(TopWidget);
+}
+void AInGameControlHUD::UISideButton2Action(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->SideButton2();
+}
+void AInGameControlHUD::UISideButton2Action() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  UISideButton2Action(TopWidget);
+}
+void AInGameControlHUD::UISideButton3Action(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->SideButton3();
+}
+void AInGameControlHUD::UISideButton3Action() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  UISideButton3Action(TopWidget);
+}
+void AInGameControlHUD::UISideButton4Action(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->SideButton4();
+}
+void AInGameControlHUD::UISideButton4Action() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  UISideButton4Action(TopWidget);
+}
+void AInGameControlHUD::UICycleLeftAction(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->CycleLeft();
+}
+void AInGameControlHUD::UICycleLeftAction() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  UICycleLeftAction(TopWidget);
+}
+void AInGameControlHUD::UICycleRightAction(UUserWidget* ActionableWidget) {
+  if (!bUIAcceptingInput()) return;
+
+  check(ActionableWidget);
+  FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
+  if (!UIActionable || !UIActionable->AdvanceUI) return;
+
+  UIActionable->CycleRight();
+}
+void AInGameControlHUD::UICycleRightAction() {
+  if (OpenedViewWidgets.IsEmpty()) return;
+
+  UUserWidget* TopWidget = OpenedViewWidgets.Last();
+  UICycleRightAction(TopWidget);
 }
 
 inline FUIRefresh* GetUIRefresh(UUserWidget* Widget) { return GetOptReflectedProp<FUIRefresh>(Widget, "UIRefresh"); }

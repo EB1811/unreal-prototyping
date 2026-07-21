@@ -47,7 +47,7 @@ void APlayerCharacter::OpenPauseMenu(const FInputActionValue& Value) {
 void APlayerCharacter::AdvanceUI(const FInputActionValue& Value) {
   if (!ControlHUD) return;
 
-  ControlHUD->AdvanceUI();
+  ControlHUD->AdvanceUIAction();
 }
 void APlayerCharacter::UIDirectionalInputAction(const FInputActionValue& Value) {
   if (!ControlHUD) return;

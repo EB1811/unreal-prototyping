@@ -97,7 +97,7 @@ void UPauseMenuViewWidget::SetupUIActionable() {
     if (SettingsWidget->GetVisibility() == ESlateVisibility::Visible) {
       UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
       AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
-      ControlHUD->AdvanceUI(SettingsWidget);
+      ControlHUD->AdvanceUIAction(SettingsWidget);
     } else {
       SelectHoveredButton();
     }

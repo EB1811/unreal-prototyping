@@ -2,12 +2,12 @@
 #include "Kismet/GameplayStatics.h"
 
 void UGameStateSubsystem::ChangeGameState(GlobalGameState NewGameState) {
-  if (CurrentGameState == NewGameState) return;
+  if (CurrGameState == NewGameState) return;
 
   if (NewGameState == GlobalGameState::Paused) UGameplayStatics::SetGamePaused(GetWorld(), true);
-  if (CurrentGameState == GlobalGameState::Paused) UGameplayStatics::SetGamePaused(GetWorld(), false);
+  if (CurrGameState == GlobalGameState::Paused) UGameplayStatics::SetGamePaused(GetWorld(), false);
 
-  GlobalGameState OldGameState = CurrentGameState;
-  CurrentGameState = NewGameState;
-  GameStateChangedDelegate.Broadcast(OldGameState, NewGameState);
+  PrevGameState = CurrGameState;
+  CurrGameState = NewGameState;
+  GameStateChangedDelegate.Broadcast(PrevGameState, NewGameState);
 }

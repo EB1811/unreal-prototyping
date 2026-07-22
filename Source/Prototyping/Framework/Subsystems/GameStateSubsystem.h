@@ -17,12 +17,14 @@ class PROTOTYPING_API UGameStateSubsystem : public UWorldSubsystem {
   GENERATED_BODY()
 
 public:
-  UGameStateSubsystem() { CurrentGameState = GlobalGameState::InGame; }
-
-  UPROPERTY(EditAnywhere)
-  GlobalGameState CurrentGameState;
+  UGameStateSubsystem() { CurrGameState = GlobalGameState::InGame; }
 
   FGameStateChangedDelegate GameStateChangedDelegate;
+
+  UPROPERTY(EditAnywhere)
+  GlobalGameState PrevGameState;
+  UPROPERTY(EditAnywhere)
+  GlobalGameState CurrGameState;
 
   void ChangeGameState(GlobalGameState NewGameState);
 };

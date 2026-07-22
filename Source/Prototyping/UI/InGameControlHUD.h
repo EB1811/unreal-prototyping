@@ -45,8 +45,6 @@ public:
   FInGameInputActions InGameInputActions;
   UPROPERTY(EditAnywhere)
   FInUIInputActions InUIInputActions;
-  UPROPERTY(EditAnywhere)
-  FInCutsceneInputActions InCutsceneInputActions;
 
   void InitUIWidgets();  // * Some stuff needs to be set up after all unreal funcs are called.
 

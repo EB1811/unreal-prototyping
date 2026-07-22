@@ -5,6 +5,7 @@
 #include "Prototyping/UI/PauseMenu/PauseMenuViewWidget.h"
 #include "Prototyping/UI/TestHudWidget.h"
 #include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
+#include "Prototyping/Framework/Subsystems/GameStateSubsystem.h"
 #include "Components/PanelWidget.h"
 #include "TimerManager.h"
 
@@ -28,6 +29,8 @@ void AInGameControlHUD::DrawHUD() { Super::DrawHUD(); }
 
 void AInGameControlHUD::BeginPlay() {
   Super::BeginPlay();
+
+  GameStateSubsystem = GetSubsystem<UGameStateSubsystem>(GetWorld());
 
   const FInputModeGameOnly InputMode;
   GetOwningPlayerController()->SetInputMode(InputMode);
@@ -129,6 +132,8 @@ void AInGameControlHUD::OpenViewWidget(UUserWidget* Widget) {
     const FInputModeGameAndUI InputMode;
     GetOwningPlayerController()->SetInputMode(InputMode);
     GetOwningPlayerController()->SetShowMouseCursor(true);
+
+    GameStateSubsystem->ChangeGameState(GlobalGameState::FocussedMenu);
   }
 
   ShowWidget(Widget);
@@ -149,6 +154,8 @@ void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
     const FInputModeGameOnly InputMode;
     GetOwningPlayerController()->SetInputMode(InputMode);
     GetOwningPlayerController()->SetShowMouseCursor(false);
+
+    GameStateSubsystem->ChangeGameState(GlobalGameState::InGame);
   }
 
   HideWidget(Widget);

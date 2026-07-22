@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Prototyping/Framework/GameStateStructs.h"
 #include "Prototyping/Player/InputStructs.h"
 #include "PlayerCharacter.generated.h"
 
@@ -18,16 +19,18 @@ public:
   virtual void BeginPlay() override;
   virtual void Tick(float DeltaTime) override;
 
+  UPROPERTY(EditAnywhere)
+  class UGameStateSubsystem* GameStateSubsystem;
+  void HandleGlobalGameStateChanged(GlobalGameState OldGameState, GlobalGameState NewGameState);
+
   UPROPERTY()
   class AInGameControlHUD* ControlHUD;
 
   // * Input
   UPROPERTY(EditAnywhere)
-  class UInputMappingContext* InputContext;
+  TMap<GlobalGameState, class UInputMappingContext*> InputContexts;
   UPROPERTY(EditAnywhere)
   FInGameInputActions InGameInputActions;
-  UPROPERTY(EditAnywhere)
-  class UInputMappingContext* InUIInputContext;
   UPROPERTY(EditAnywhere)
   FInUIInputActions InUIInputActions;
 

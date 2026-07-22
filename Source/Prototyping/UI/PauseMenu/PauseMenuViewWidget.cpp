@@ -82,15 +82,15 @@ void UPauseMenuViewWidget::OpenSettings() {
 
 void UPauseMenuViewWidget::RefreshUI() { MainOverlay->SetVisibility(ESlateVisibility::Visible); }
 
-void UPauseMenuViewWidget::UpdateUI(FTestUIStruct _TestStruct) { TestStruct = _TestStruct; }
-
-void UPauseMenuViewWidget::InitUI(FInUIInputActions _InUIInputActions) {
-  InUIInputActions = _InUIInputActions;
+void UPauseMenuViewWidget::UpdateUI(FTestUIStruct _TestStruct) {
+  TestStruct = _TestStruct;
 
   SettingsWidget->SetVisibility(ESlateVisibility::Collapsed);
 
   HoverButton(ResumeButton);
 }
+
+void UPauseMenuViewWidget::InitUI(FInUIInputActions _InUIInputActions) { InUIInputActions = _InUIInputActions; }
 
 void UPauseMenuViewWidget::SetupUIActionable() {
   UIActionable.AdvanceUI = [this]() {

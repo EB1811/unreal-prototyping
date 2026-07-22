@@ -2,7 +2,9 @@
 #include "PlayerCharacter.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "Prototyping/Framework/UtilFuncs.h"
 #include "Prototyping/UI/InGameControlHUD.h"
+#include "Prototyping/Framework/Subsystems/GameStateSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 
@@ -28,19 +30,25 @@ void APlayerCharacter::BeginPlay() {
 
   ControlHUD = Cast<AInGameControlHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
 
+  GameStateSubsystem = GetSubsystem<UGameStateSubsystem>(GetWorld());
+  GameStateSubsystem->GameStateChangedDelegate.AddUObject(this, &APlayerCharacter::HandleGlobalGameStateChanged);
+
   UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
       GetWorld()->GetFirstPlayerController()->GetLocalPlayer());
-  Subsystem->AddMappingContext(InputContext, 0);
+  Subsystem->AddMappingContext(InputContexts[GameStateSubsystem->CurrentGameState], 0);
 }
 
 void APlayerCharacter::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
 
-void APlayerCharacter::OpenPauseMenu(const FInputActionValue& Value) {
-  if (!ControlHUD) return;
-
+void APlayerCharacter::HandleGlobalGameStateChanged(GlobalGameState OldGameState, GlobalGameState NewGameState) {
   UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
       GetWorld()->GetFirstPlayerController()->GetLocalPlayer());
-  Subsystem->AddMappingContext(InUIInputContext, 0);
+  Subsystem->RemoveMappingContext(InputContexts[OldGameState]);
+  Subsystem->AddMappingContext(InputContexts[NewGameState], 0);
+}
+
+void APlayerCharacter::OpenPauseMenu(const FInputActionValue& Value) {
+  if (!ControlHUD) return;
 
   ControlHUD->OpenPauseMenuView();
 }

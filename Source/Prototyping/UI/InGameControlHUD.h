@@ -38,6 +38,8 @@ public:
   EHUDState HUDState;
   UPROPERTY(EditAnywhere)
   EHUDAnimState HUDAnimState;
+  UPROPERTY(EditAnywhere)
+  class UGameStateSubsystem* GameStateSubsystem;
 
   UPROPERTY(EditAnywhere)
   FInGameInputActions InGameInputActions;

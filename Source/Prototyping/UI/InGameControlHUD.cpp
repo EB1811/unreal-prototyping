@@ -111,15 +111,11 @@ void AInGameControlHUD::UIShowAnimComplete() {
   if (UIShowAnimCompleteFunc) UIShowAnimCompleteFunc();
 
   HUDAnimState = EHUDAnimState::None;
-
-  UE_LOG(LogTemp, Warning, TEXT("UIShowAnimComplete called"));
 }
 void AInGameControlHUD::UIHideAnimComplete() {
   if (UIHideAnimCompleteFunc) UIHideAnimCompleteFunc();
 
   HUDAnimState = EHUDAnimState::None;
-
-  UE_LOG(LogTemp, Warning, TEXT("UIHideAnimComplete called"));
 }
 
 void AInGameControlHUD::OpenViewWidget(UUserWidget* Widget) {
@@ -128,12 +124,13 @@ void AInGameControlHUD::OpenViewWidget(UUserWidget* Widget) {
   OpenedViewWidgets.Add(Widget);
   if (OpenedViewWidgets.Num() <= 1) {
     HUDState = EHUDState::FocusedMenu;
-
-    const FInputModeGameAndUI InputMode;
-    GetOwningPlayerController()->SetInputMode(InputMode);
-    GetOwningPlayerController()->SetShowMouseCursor(true);
-
     GameStateSubsystem->ChangeGameState(GlobalGameState::FocussedMenu);
+
+    UIShowAnimCompleteFunc = [this, Widget]() {
+      const FInputModeGameAndUI InputMode;
+      GetOwningPlayerController()->SetInputMode(InputMode);
+      GetOwningPlayerController()->SetShowMouseCursor(true);
+    };
   }
 
   ShowWidget(Widget);
@@ -150,19 +147,18 @@ void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
   OpenedViewWidgets.Remove(Widget);
   if (OpenedViewWidgets.IsEmpty()) {
     HUDState = EHUDState::InGame;
+    GameStateSubsystem->ChangeGameState(GlobalGameState::InGame);
 
     const FInputModeGameOnly InputMode;
     GetOwningPlayerController()->SetInputMode(InputMode);
     GetOwningPlayerController()->SetShowMouseCursor(false);
-
-    GameStateSubsystem->ChangeGameState(GlobalGameState::InGame);
   }
 
   HideWidget(Widget);
 }
 
 auto AInGameControlHUD::bUIAcceptingInput() const -> bool {
-  // if (HUDState == EHUDState::PlayingAnim) return false;
+  if (HUDAnimState == EHUDAnimState::PlayingAnim) return false;
 
   return true;
 }
@@ -189,7 +185,7 @@ void AInGameControlHUD::AdvanceUIHoldAction(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->AdvanceUIHold) return;
 
   UIActionable->AdvanceUIHold();
 }
@@ -204,7 +200,7 @@ void AInGameControlHUD::RetractUIAction(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->RetractUI) return;
 
   UIActionable->RetractUI();
 }
@@ -219,7 +215,7 @@ void AInGameControlHUD::QuitUIAction(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->QuitUI) return;
 
   UIActionable->QuitUI();
 }
@@ -234,7 +230,7 @@ void AInGameControlHUD::UINumericInputAction(float Value, UUserWidget* Actionabl
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->NumericInput) return;
 
   UIActionable->NumericInput(Value);
 }
@@ -264,7 +260,7 @@ void AInGameControlHUD::UISideButton1Action(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->SideButton1) return;
 
   UIActionable->SideButton1();
 }
@@ -279,7 +275,7 @@ void AInGameControlHUD::UISideButton2Action(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->SideButton2) return;
 
   UIActionable->SideButton2();
 }
@@ -294,7 +290,7 @@ void AInGameControlHUD::UISideButton3Action(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->SideButton3) return;
 
   UIActionable->SideButton3();
 }
@@ -309,7 +305,7 @@ void AInGameControlHUD::UISideButton4Action(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->SideButton4) return;
 
   UIActionable->SideButton4();
 }
@@ -324,7 +320,7 @@ void AInGameControlHUD::UICycleLeftAction(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->CycleLeft) return;
 
   UIActionable->CycleLeft();
 }
@@ -339,7 +335,7 @@ void AInGameControlHUD::UICycleRightAction(UUserWidget* ActionableWidget) {
 
   check(ActionableWidget);
   FUIActionable* UIActionable = GetUIActionable(ActionableWidget);
-  if (!UIActionable || !UIActionable->AdvanceUI) return;
+  if (!UIActionable || !UIActionable->CycleRight) return;
 
   UIActionable->CycleRight();
 }

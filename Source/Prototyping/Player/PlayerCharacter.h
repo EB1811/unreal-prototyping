@@ -5,7 +5,27 @@
 #include "GameFramework/Character.h"
 #include "Prototyping/Framework/GameStateStructs.h"
 #include "Prototyping/Player/InputStructs.h"
+#include "Prototyping/Interaction/InteractionComponent.h"
 #include "PlayerCharacter.generated.h"
+
+USTRUCT()
+struct FInteractionData {
+  GENERATED_BODY()
+
+  UPROPERTY(EditAnywhere)
+  float LastInteractionCheckTime;
+  UPROPERTY(EditAnywhere)
+  bool IsInteracting;
+  UPROPERTY(EditAnywhere)
+  float InteractionCheckFrequency;
+  UPROPERTY(EditAnywhere)
+  float InteractionCheckDistance;
+  UPROPERTY(EditAnywhere)
+  float InteractionCheckRadius;
+
+  UPROPERTY(EditAnywhere)
+  TMap<EInteractionType, int32> InteractionPriorities;
+};
 
 UCLASS()
 class PROTOTYPING_API APlayerCharacter : public ACharacter {
@@ -21,11 +41,11 @@ public:
 
   UPROPERTY(EditAnywhere)
   class UGameStateSubsystem* GameStateSubsystem;
-  void HandleGlobalGameStateChanged(GlobalGameState OldGameState, GlobalGameState NewGameState);
+  void HandleGlobalGameStateChanged(EGlobalGameState OldGameState, EGlobalGameState NewGameState);
 
   // * Input
   UPROPERTY(EditAnywhere)
-  TMap<GlobalGameState, class UInputMappingContext*> InputContexts;
+  TMap<EGlobalGameState, class UInputMappingContext*> InputContexts;
   UPROPERTY(EditAnywhere)
   FInGameInputActions InGameInputActions;
   UPROPERTY(EditAnywhere)
@@ -93,4 +113,14 @@ public:
   // * Movement
   UPROPERTY(EditAnywhere, BlueprintReadWrite)
   FVector FacingDirection;
+
+  // * Interaction
+  UPROPERTY(EditAnywhere)
+  FInteractionData InteractionData;
+  UPROPERTY(EditAnywhere)
+  class UInteractionComponent* CurrentInteractableC;
+  auto CheckForInteraction() -> bool;             // Simple & ticked for UI.
+  auto CheckForPrioritisedInteraction() -> bool;  // Including prioritisation.
+  auto IsInteractable(const class UInteractionComponent* Interactable) const -> bool;
+  void HandleInteraction(class UInteractionComponent* Interactable);
 };

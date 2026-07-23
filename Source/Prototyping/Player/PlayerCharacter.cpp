@@ -5,10 +5,16 @@
 #include "Engine/World.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Prototyping/Framework/UtilFuncs.h"
+#include "Prototyping/Interaction/InteractionComponent.h"
+#include "Prototyping/Dialogue/DialogueComponent.h"
+#include "Prototyping/Dialogue/DialoguePlayerSystem.h"
 #include "Prototyping/UI/InGameControlHUD.h"
 #include "Prototyping/Framework/Subsystems/GameStateSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "DrawDebugHelpers.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "Engine/EngineTypes.h"
 
 APlayerCharacter::APlayerCharacter() {
   SpringArmC = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArmComponent"));
@@ -77,9 +83,15 @@ void APlayerCharacter::BeginPlay() {
   ControlHUD->InUIInputActions = InUIInputActions;
 }
 
-void APlayerCharacter::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
+void APlayerCharacter::Tick(float DeltaTime) {
+  Super::Tick(DeltaTime);
 
-void APlayerCharacter::HandleGlobalGameStateChanged(GlobalGameState OldGameState, GlobalGameState NewGameState) {
+  if (GameStateSubsystem->CurrGameState == EGlobalGameState::InGame &&
+      GetWorld()->TimeSince(InteractionData.LastInteractionCheckTime) > InteractionData.InteractionCheckFrequency)
+    CheckForInteraction();
+}
+
+void APlayerCharacter::HandleGlobalGameStateChanged(EGlobalGameState OldGameState, EGlobalGameState NewGameState) {
   UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
       GetWorld()->GetFirstPlayerController()->GetLocalPlayer());
   Subsystem->RemoveMappingContext(InputContexts[OldGameState]);
@@ -129,3 +141,130 @@ void APlayerCharacter::UISideButton3Action(const FInputActionValue& Value) { Con
 void APlayerCharacter::UISideButton4Action(const FInputActionValue& Value) { ControlHUD->UISideButton4Action(); }
 void APlayerCharacter::UICycleLeftAction(const FInputActionValue& Value) { ControlHUD->UICycleLeftAction(); }
 void APlayerCharacter::UICycleRightAction(const FInputActionValue& Value) { ControlHUD->UICycleRightAction(); }
+
+auto APlayerCharacter::CheckForInteraction() -> bool {
+  InteractionData.LastInteractionCheckTime = GetWorld()->GetTimeSeconds();
+
+  FVector TraceStart{GetPawnViewLocation() - FVector(0, 0, 50)};
+  FVector TraceEnd{TraceStart + GetActorForwardVector() * InteractionData.InteractionCheckDistance};
+  FCollisionShape Sphere = FCollisionShape::MakeSphere(InteractionData.InteractionCheckRadius);
+
+  DrawDebugLine(GetWorld(), TraceStart, TraceEnd, FColor::Blue, false, 0.1f, 0, 5.0f);
+  FHitResult DebugHit;
+  TArray<AActor*> DebugActorsToIgnore;
+  DebugActorsToIgnore.Add(this);
+  UKismetSystemLibrary::SphereTraceSingle(GetWorld(), TraceStart, TraceEnd, Sphere.GetSphereRadius(),
+                                          UEngineTypes::ConvertToTraceType(ECC_Visibility), false, DebugActorsToIgnore,
+                                          EDrawDebugTrace::ForDuration, DebugHit, true, FLinearColor::Red,
+                                          FLinearColor::Green, InteractionData.InteractionCheckFrequency);
+
+  FCollisionQueryParams TraceParams;
+  TraceParams.AddIgnoredActor(this);
+  FHitResult TraceHit;
+
+  if (GetWorld()->SweepSingleByChannel(TraceHit, TraceStart, TraceEnd, FQuat::Identity, ECC_Visibility, Sphere,
+                                       TraceParams)) {
+    if ((TraceStart - TraceHit.ImpactPoint).Size() <= InteractionData.InteractionCheckDistance)
+      if (UInteractionComponent* Interactable = TraceHit.GetActor()->FindComponentByClass<UInteractionComponent>()) {
+        if (!IsInteractable(Interactable)) return false;
+
+        CurrentInteractableC = Interactable;
+        // if (!bInCinematicView) {
+        //   PlayerWidgetComponent->SetWorldLocation(GetActorLocation() + FVector(0, -35.0f, 110.0f));
+        //   PlayerWidgetComponent->SetVisibility(true, true);
+        // }
+        return true;
+      }
+  }
+
+  if (CurrentInteractableC) CurrentInteractableC = nullptr;
+
+  return false;
+}
+auto APlayerCharacter::CheckForPrioritisedInteraction() -> bool {
+  InteractionData.LastInteractionCheckTime = GetWorld()->GetTimeSeconds();
+
+  FVector TraceStart{GetPawnViewLocation() - FVector(0, 0, 50)};
+  FVector TraceEnd{TraceStart + GetActorForwardVector() * InteractionData.InteractionCheckDistance};
+  FCollisionShape Sphere = FCollisionShape::MakeSphere(InteractionData.InteractionCheckRadius);
+
+  FCollisionQueryParams TraceParams;
+  TraceParams.AddIgnoredActor(this);
+  TArray<FHitResult> TraceHits;
+
+  bool bHit = GetWorld()->SweepMultiByChannel(TraceHits, TraceStart, TraceEnd, FQuat::Identity, ECC_Visibility, Sphere,
+                                              TraceParams);
+  if (!bHit) {
+    if (CurrentInteractableC) CurrentInteractableC = nullptr;
+    // PlayerWidgetComponent->SetVisibility(false, true);
+    return false;
+  }
+
+  auto FilteredTraceHits = TraceHits.FilterByPredicate([&](const FHitResult& Hit) {
+    return ((TraceStart - Hit.ImpactPoint).Size() <= InteractionData.InteractionCheckDistance) && Hit.GetActor() &&
+           Hit.GetActor()->FindComponentByClass<UInteractionComponent>();
+  });
+  if (FilteredTraceHits.Num() <= 0) {
+    if (CurrentInteractableC) CurrentInteractableC = nullptr;
+    // PlayerWidgetComponent->SetVisibility(false, true);
+    return false;
+  }
+  UE_LOG(LogTemp, Warning, TEXT("Found %d interactable hits."), FilteredTraceHits.Num());
+
+  // Sort based on priority and distance.
+  FilteredTraceHits.Sort([&](const FHitResult& A, const FHitResult& B) {
+    auto* AInteractable = A.GetActor()->FindComponentByClass<UInteractionComponent>();
+    auto* BInteractable = B.GetActor()->FindComponentByClass<UInteractionComponent>();
+    if (AInteractable && BInteractable) {
+      int32 APrio = InteractionData.InteractionPriorities.Contains(AInteractable->InteractionType)
+                        ? InteractionData.InteractionPriorities[AInteractable->InteractionType]
+                        : 0;
+      int32 BPrio = InteractionData.InteractionPriorities.Contains(BInteractable->InteractionType)
+                        ? InteractionData.InteractionPriorities[BInteractable->InteractionType]
+                        : 0;
+
+      if ((APrio > 0 || BPrio > 0) && (APrio != BPrio)) return APrio > BPrio;
+    }
+
+    return (TraceStart - A.ImpactPoint).SizeSquared() < (TraceStart - B.ImpactPoint).SizeSquared();
+  });
+
+  auto TraceHit = FilteredTraceHits[0];
+  UInteractionComponent* Interactable = TraceHit.GetActor()->FindComponentByClass<UInteractionComponent>();
+  if (!IsInteractable(Interactable)) return false;
+
+  CurrentInteractableC = Interactable;
+  // if (!bInCinematicView) {
+  //   PlayerWidgetComponent->SetWorldLocation(GetActorLocation() + FVector(0, -35.0f, 110.0f));
+  //   PlayerWidgetComponent->SetVisibility(true, true);
+  // }
+  return true;
+}
+auto APlayerCharacter::IsInteractable(const UInteractionComponent* Interactable) const -> bool {
+  check(Interactable);
+  if (GameStateSubsystem->CurrGameState != EGlobalGameState::InGame) return false;
+
+  switch (Interactable->InteractionType) {
+    case EInteractionType::None: return false; break;
+    default: break;
+  }
+
+  return true;
+}
+void APlayerCharacter::HandleInteraction(UInteractionComponent* Interactable) {
+  // PlayerWidgetComponent->SetVisibility(false, true);
+
+  Interactable->PlayInteractionSound();
+  switch (Interactable->InteractionType) {
+    case EInteractionType::Use: {
+      Interactable->InteractUse();
+      break;
+    }
+    case EInteractionType::Dialogue: {
+      auto DialogueC = Interactable->InteractDialogue();
+      // EnterDialogue(DialogueC.GetValue());
+      break;
+    }
+    default: checkNoEntry();
+  }
+}

@@ -9,22 +9,22 @@
 #include "GameStateSubsystem.generated.h"
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGameStateChangedDelegate,
-                                     GlobalGameState,
-                                     GlobalGameState);  // * Old state, new state.
+                                     EGlobalGameState,
+                                     EGlobalGameState);  // * Old state, new state.
 
 UCLASS()
 class PROTOTYPING_API UGameStateSubsystem : public UWorldSubsystem {
   GENERATED_BODY()
 
 public:
-  UGameStateSubsystem() { CurrGameState = GlobalGameState::InGame; }
+  UGameStateSubsystem() { CurrGameState = EGlobalGameState::InGame; }
 
   FGameStateChangedDelegate GameStateChangedDelegate;
 
   UPROPERTY(EditAnywhere)
-  GlobalGameState PrevGameState;
+  EGlobalGameState PrevGameState;
   UPROPERTY(EditAnywhere)
-  GlobalGameState CurrGameState;
+  EGlobalGameState CurrGameState;
 
-  void ChangeGameState(GlobalGameState NewGameState);
+  void ChangeGameState(EGlobalGameState NewGameState);
 };

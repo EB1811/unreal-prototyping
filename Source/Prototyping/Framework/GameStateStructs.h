@@ -6,7 +6,7 @@
 #include "GameStateStructs.generated.h"
 
 UENUM()
-enum class GlobalGameState : uint8 {
+enum class EGlobalGameState : uint8 {
   InGame UMETA(DisplayName = "InGame"),
   FocussedMenu UMETA(DisplayName = "FocusedMenu"),  // * A menu is open and focused.
   NoControl UMETA(DisplayName = "NoControl"),       // * No input control (e.g., during loading).

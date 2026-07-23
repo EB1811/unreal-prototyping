@@ -124,7 +124,7 @@ void AInGameControlHUD::OpenViewWidget(UUserWidget* Widget) {
   OpenedViewWidgets.Add(Widget);
   if (OpenedViewWidgets.Num() <= 1) {
     HUDState = EHUDState::FocusedMenu;
-    GameStateSubsystem->ChangeGameState(GlobalGameState::FocussedMenu);
+    GameStateSubsystem->ChangeGameState(EGlobalGameState::FocussedMenu);
 
     UIShowAnimCompleteFunc = [this, Widget]() {
       const FInputModeGameAndUI InputMode;
@@ -147,7 +147,7 @@ void AInGameControlHUD::CloseViewWidget(UUserWidget* Widget) {
   OpenedViewWidgets.Remove(Widget);
   if (OpenedViewWidgets.IsEmpty()) {
     HUDState = EHUDState::InGame;
-    GameStateSubsystem->ChangeGameState(GlobalGameState::InGame);
+    GameStateSubsystem->ChangeGameState(EGlobalGameState::InGame);
 
     const FInputModeGameOnly InputMode;
     GetOwningPlayerController()->SetInputMode(InputMode);

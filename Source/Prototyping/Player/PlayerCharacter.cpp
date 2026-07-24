@@ -8,6 +8,7 @@
 #include "Prototyping/Interaction/InteractionComponent.h"
 #include "Prototyping/Dialogue/DialogueComponent.h"
 #include "Prototyping/Dialogue/DialoguePlayerSystem.h"
+#include "Prototyping/Dialogue/DialogueDataStructs.h"
 #include "Prototyping/UI/InGameControlHUD.h"
 #include "Prototyping/Framework/Subsystems/GameStateSubsystem.h"
 #include "EnhancedInputComponent.h"
@@ -262,9 +263,35 @@ void APlayerCharacter::HandleInteraction(UInteractionComponent* Interactable) {
     }
     case EInteractionType::Dialogue: {
       auto DialogueC = Interactable->InteractDialogue();
-      // EnterDialogue(DialogueC.GetValue());
+      EnterDialogue(DialogueC.GetValue());
       break;
     }
     default: checkNoEntry();
   }
+}
+
+void APlayerCharacter::EnterDialogue(UDialogueComponent* DialogueC,
+                                     TFunction<void()> OnDialogueCloseFunc,
+                                     TFunction<void()> OnDialogueFinishFunc) {
+  if (DialogueC->DialogueArray.Num() == 0) {
+    if (OnDialogueCloseFunc) OnDialogueCloseFunc();
+    if (OnDialogueFinishFunc) OnDialogueFinishFunc();
+    return;
+  }
+
+  // DialoguePlayerSystem->StartDialogue(DialogueC, OnDialogueCloseFunc, OnDialogueFinishFunc);
+}
+// For dialogue outside of the dialogue component (cutscenes, etc.).
+void APlayerCharacter::EnterDialogue(const TArray<FDialogueData> DialogueDataArr,
+                                     TFunction<void()> OnDialogueCloseFunc,
+                                     TFunction<void()> OnDialogueFinishFunc,
+                                     const FString& _SpeakerName) {
+  if (DialogueDataArr.Num() == 0) {
+    if (OnDialogueCloseFunc) OnDialogueCloseFunc();
+    if (OnDialogueFinishFunc) OnDialogueFinishFunc();
+    return;
+  }
+
+  DialoguePlayerSystem->StartDialogue(DialogueDataArr, _SpeakerName);
+  // ControlHUD->SetAndOpenDialogue(DialoguePlayerSystem, OnDialogueCloseFunc, OnDialogueFinishFunc);
 }

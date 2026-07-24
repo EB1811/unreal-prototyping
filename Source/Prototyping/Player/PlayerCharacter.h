@@ -102,6 +102,10 @@ public:
   UPROPERTY(EditAnywhere)
   class UCameraComponent* CameraC;
 
+  // * Player systems.
+  UPROPERTY(EditAnywhere)
+  class UDialoguePlayerSystem* DialoguePlayerSystem;
+
   // * Components
   // UPROPERTY(EditAnywhere, Category = "Character | Components")
   // class UInventoryComponent* PlayerInventoryComponent;
@@ -123,4 +127,12 @@ public:
   auto CheckForPrioritisedInteraction() -> bool;  // Including prioritisation.
   auto IsInteractable(const class UInteractionComponent* Interactable) const -> bool;
   void HandleInteraction(class UInteractionComponent* Interactable);
+
+  void EnterDialogue(class UDialogueComponent* DialogueC,
+                     TFunction<void()> OnDialogueCloseFunc = nullptr,
+                     TFunction<void()> OnDialogueFinishFunc = nullptr);
+  void EnterDialogue(const TArray<struct FDialogueData> DialogueDataArr,
+                     TFunction<void()> OnDialogueCloseFunc = nullptr,
+                     TFunction<void()> OnDialogueFinishFunc = nullptr,
+                     const FString& _SpeakerName = "NPC");
 };

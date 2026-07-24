@@ -6,17 +6,12 @@
 #include "DialogueDataStructs.h"
 #include "DialoguePlayerSystem.generated.h"
 
-EDialogueState GetNextDialogueState(EDialogueState CurrentState, EDialogueAction Action);
-TArray<int32> GetChildChoiceIndexes(const TArray<FDialogueData>& DialogueDataArr,
-                                    int32 StartIndex,
-                                    int32 ChoicesAmount);
-
 UCLASS(Blueprintable)
 class PROTOTYPING_API UDialoguePlayerSystem : public UObject {
   GENERATED_BODY()
 
 public:
-  UDialoguePlayerSystem() : DialogueState(EDialogueState::None), CurrentDialogueIndex(0) {}
+  UDialoguePlayerSystem() : DialogueState(EDialogueState::None), CurrDialogueIndex(0) {}
 
   UPROPERTY(EditAnywhere)
   class UDialogueComponent* DialogueC;
@@ -28,22 +23,21 @@ public:
   FText SpeakerName;
   UPROPERTY(EditAnywhere)
   TArray<FDialogueData> DialogueDataArr;
+
   UPROPERTY(EditAnywhere)
-  int32 CurrentDialogueIndex;
+  int32 CurrDialogueIndex;
   UPROPERTY(EditAnywhere)
   TArray<int32> InquireBlockIndexes;
 
-  UPROPERTY(EditAnywhere)
-  TArray<FName> ChoiceDialoguesSelectedIDs;
-
-  FNextDialogueRes StartDialogue(class UDialogueComponent* _DialogueC);
-  FNextDialogueRes StartDialogue(const TArray<FDialogueData> _DialogueDataArr, const FString& _SpeakerName = "NPC");
+  void StartDialogue(const TArray<FDialogueData> _DialogueDataArr, const FString& _SpeakerName = "NPC");
+  void StartDialogue(class UDialogueComponent* _DialogueC);
 
   void NextDialogue();
-  TArray<FDialogueData> GetChoiceDialogues();
-  FNextDialogueRes DialogueChoice(int32 ChoiceIndex);
-  TArray<FDialogueData> GetInquireDialogues();
-  FNextDialogueRes InquireDialogue(int32 InquireIndex);
+
+  auto GetChoiceDialogues() -> TArray<FDialogueData>;
+  void DialogueChoice(int32 ChoiceIndex);
+  auto GetInquireDialogues() -> TArray<FDialogueData>;
+  void InquireDialogue(int32 InquireIndex);
 
   void ResetDialogue();
 };

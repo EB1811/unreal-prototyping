@@ -2,116 +2,104 @@
 #include "DialogueDataStructs.h"
 #include "DialogueComponent.h"
 #include "HAL/Platform.h"
+#include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
+#include "Prototyping/Framework/UtilFuncs.h"
+#include "Prototyping/UI/InGameControlHUD.h"
 
-EDialogueState GetNextDialogueState(EDialogueState CurrentState, EDialogueAction Action) {
+inline auto GetNextDialogueState(EDialogueState CurrentState, EDialogueAction Action) -> EDialogueState {
   switch (Action) {
-    case EDialogueAction::NPCNext: return EDialogueState::NPCTalk;
-    case EDialogueAction::PlayerNext: return EDialogueState::PlayerTalk;
-    case EDialogueAction::AskPlayer: return EDialogueState::PlayerChoice;
+    case EDialogueAction::NextDialogue: return EDialogueState::Dialogue;
+    case EDialogueAction::StartPlayerChoice: return EDialogueState::PlayerChoice;
     case EDialogueAction::StartPlayerInquire: return EDialogueState::PlayerInquire;
     case EDialogueAction::EndPlayerInquire: return EDialogueState::EndPlayerInquire;
     case EDialogueAction::End: return EDialogueState::End;
+    case EDialogueAction::None: return CurrentState;
     default: return EDialogueState::None;
   }
 }
-
 // Note: Preorder traversal, only looking for direct children.
-TArray<int32> GetChildChoiceIndexes(const TArray<FDialogueData>& DialogueDataArr,
-                                    int32 StartIndex,
-                                    int32 ChoicesAmount) {
-  TArray<int32> ChoiceDialogueIndexes;
-  ChoiceDialogueIndexes.Reserve(ChoicesAmount);
-
-  int32 FoundChoices = 0;
-  int32 IgnoreNext = 0;
-  for (int32 i = StartIndex; i < DialogueDataArr.Num(); i += 1) {
-    if (DialogueDataArr[i].DialogueType == EDialogueType::Choice) {
-      if (IgnoreNext > 0) {
-        IgnoreNext -= 1;
-        continue;
-      }
-
-      ChoiceDialogueIndexes.Add(i);
-      if (ChoiceDialogueIndexes.Num() == ChoicesAmount) break;
-    }
-    if (DialogueDataArr[i].Action == EDialogueAction::AskPlayer) IgnoreNext = DialogueDataArr[i].ChoicesAmount;
-  }
-
-  return ChoiceDialogueIndexes;
-}
-inline auto GetChildInquireIndexes(const TArray<FDialogueData>& DialogueDataArr, int32 StartIndex) -> TArray<int32> {
-  int32 InquireAmount = DialogueDataArr[StartIndex].ChoicesAmount;
+inline auto GetDialogueTreeChildIndexes(const TArray<FDialogueData>& DialogueDataArr,
+                                        int32 StartIndex,
+                                        EDialogueType ChildType,
+                                        EDialogueAction BranchAction) -> TArray<int32> {
+  int32 ChildrenAmount = DialogueDataArr[StartIndex].BranchChildrenAmount;
   TArray<int32> DialogueIndexes;
-  DialogueIndexes.Reserve(InquireAmount);
+  DialogueIndexes.Reserve(ChildrenAmount);
 
-  int32 FoundInquire = 0;
   int32 IgnoreNext = 0;
   for (int32 i = StartIndex + 1; i < DialogueDataArr.Num(); i += 1) {
-    if (DialogueDataArr[i].DialogueType == EDialogueType::Inquire) {
+    if (DialogueDataArr[i].DialogueType == ChildType) {
       if (IgnoreNext > 0) {
         IgnoreNext -= 1;
         continue;
       }
 
       DialogueIndexes.Add(i);
-      if (DialogueIndexes.Num() == InquireAmount) break;
+      if (DialogueIndexes.Num() == ChildrenAmount) break;
     }
-    if (DialogueDataArr[i].Action == EDialogueAction::StartPlayerInquire) IgnoreNext = DialogueDataArr[i].ChoicesAmount;
+    if (DialogueDataArr[i].Action == BranchAction) IgnoreNext = DialogueDataArr[i].BranchChildrenAmount;
   }
 
   return DialogueIndexes;
 }
+inline auto GetChildChoiceIndexes(const TArray<FDialogueData>& DialogueDataArr, int32 StartIndex) -> TArray<int32> {
+  return GetDialogueTreeChildIndexes(DialogueDataArr, StartIndex, EDialogueType::Choice,
+                                     EDialogueAction::StartPlayerChoice);
+}
+inline auto GetChildInquireIndexes(const TArray<FDialogueData>& DialogueDataArr, int32 StartIndex) -> TArray<int32> {
+  return GetDialogueTreeChildIndexes(DialogueDataArr, StartIndex, EDialogueType::Inquire,
+                                     EDialogueAction::StartPlayerInquire);
+}
 
-FNextDialogueRes UDialoguePlayerSystem::StartDialogue(class UDialogueComponent* _DialogueC) {
+void UDialoguePlayerSystem::StartDialogue(const TArray<FDialogueData> _DialogueDataArr, const FString& _SpeakerName) {
+  check(_DialogueDataArr.Num() > 0);
+
+  ResetDialogue();
+
+  DialogueState = GetNextDialogueState(DialogueState, EDialogueAction::NextDialogue);
+  SpeakerName = FText::FromString(_SpeakerName);
+  DialogueDataArr = _DialogueDataArr;
+  CurrDialogueIndex = 0;
+}
+void UDialoguePlayerSystem::StartDialogue(class UDialogueComponent* _DialogueC) {
   check(_DialogueC && _DialogueC->DialogueArray.Num() > 0);
 
   ResetDialogue();
 
   DialogueC = _DialogueC;
-  DialogueState =
-      GetNextDialogueState(DialogueState, DialogueC->DialogueArray[0].DialogueSpeaker == EDialogueSpeaker::NPC
-                                              ? EDialogueAction::NPCNext
-                                              : EDialogueAction::PlayerNext);
+  DialogueState = GetNextDialogueState(DialogueState, EDialogueAction::NextDialogue);
   SpeakerName = DialogueC->SpeakerName;
   DialogueDataArr = DialogueC->GetNextDialogueChain();
-  CurrentDialogueIndex = 0;
-  ChoiceDialoguesSelectedIDs.Empty();
+  CurrDialogueIndex = 0;
 
-  return {DialogueDataArr[CurrentDialogueIndex], DialogueState};
-}
-
-FNextDialogueRes UDialoguePlayerSystem::StartDialogue(const TArray<FDialogueData> _DialogueDataArr,
-                                                      const FString& _SpeakerName) {
-  check(_DialogueDataArr.Num() > 0);
-
-  ResetDialogue();
-
-  DialogueState = GetNextDialogueState(DialogueState, _DialogueDataArr[0].DialogueSpeaker == EDialogueSpeaker::NPC
-                                                          ? EDialogueAction::NPCNext
-                                                          : EDialogueAction::PlayerNext);
-  SpeakerName = FText::FromString(_SpeakerName);
-  DialogueDataArr = _DialogueDataArr;
-  CurrentDialogueIndex = 0;
-  ChoiceDialoguesSelectedIDs.Empty();
-
-  return {DialogueDataArr[CurrentDialogueIndex], DialogueState};
+  UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
+  AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
+  // ControlHUD->UpdateAndOpenDialogue();
 }
 
 void UDialoguePlayerSystem::NextDialogue() {
-  DialogueState = GetNextDialogueState(DialogueState, DialogueDataArr[CurrentDialogueIndex].Action);
+  DialogueState = GetNextDialogueState(DialogueState, DialogueDataArr[CurrDialogueIndex].Action);
+
+  if (CurrDialogueIndex + 1 < DialogueDataArr.Num() &&
+      DialogueDataArr[CurrDialogueIndex + 1].DialogueType == EDialogueType::Pointer) {
+    FName PointerID = DialogueDataArr[CurrDialogueIndex + 1].PointerID;
+    int32 PointerIndex = DialogueDataArr.IndexOfByPredicate(
+        [PointerID](const FDialogueData& Dialogue) { return Dialogue.DialogueID == PointerID; });
+    check(PointerIndex != INDEX_NONE);
+
+    CurrDialogueIndex = PointerIndex;
+  }
 
   switch (DialogueState) {
-    case EDialogueState::NPCTalk:
-    case EDialogueState::PlayerTalk: {
-      CurrentDialogueIndex++;
+    case EDialogueState::Dialogue: {
+      CurrDialogueIndex++;
       break;
     }
     case EDialogueState::PlayerChoice: {
       break;
     }
-    // todo-low: Handle this through actions.
     case EDialogueState::PlayerInquire: {
-      InquireBlockIndexes.Add(CurrentDialogueIndex);
+      InquireBlockIndexes.Add(CurrDialogueIndex);
 
       break;
     }
@@ -120,19 +108,18 @@ void UDialoguePlayerSystem::NextDialogue() {
       InquireBlockIndexes.Pop();
 
       if (InquireBlockIndexes.Num() > 0) {
-        CurrentDialogueIndex = InquireBlockIndexes.Last();
+        CurrDialogueIndex = InquireBlockIndexes.Last();
         DialogueState = EDialogueState::PlayerInquire;
         break;
       }
 
-      // No more inquire blocks, end dialogue.
       DialogueState = EDialogueState::End;
       if (DialogueC) DialogueC->FinishReadingDialogueChain();
       break;
     }
     case EDialogueState::End: {
       if (InquireBlockIndexes.Num() > 0) {
-        CurrentDialogueIndex = InquireBlockIndexes.Last();
+        CurrDialogueIndex = InquireBlockIndexes.Last();
         DialogueState = EDialogueState::PlayerInquire;
         break;
       }
@@ -147,57 +134,50 @@ void UDialoguePlayerSystem::NextDialogue() {
   }
 }
 
-TArray<FDialogueData> UDialoguePlayerSystem::GetChoiceDialogues() {
+auto UDialoguePlayerSystem::GetChoiceDialogues() -> TArray<FDialogueData> {
   if (DialogueState != EDialogueState::PlayerChoice) return {};
 
-  const TArray<int32>& ChildChoiceIndexes = GetChildChoiceIndexes(DialogueDataArr, CurrentDialogueIndex + 1,
-                                                                  DialogueDataArr[CurrentDialogueIndex].ChoicesAmount);
+  const TArray<int32>& ChildChoiceIndexes = GetChildChoiceIndexes(DialogueDataArr, CurrDialogueIndex);
   TArray<FDialogueData> ChoiceDialogueArr = {};
   ChoiceDialogueArr.Reserve(ChildChoiceIndexes.Num());
   for (int32 ChoiceIndex : ChildChoiceIndexes) ChoiceDialogueArr.Add(DialogueDataArr[ChoiceIndex]);
 
   return ChoiceDialogueArr;
 }
-FNextDialogueRes UDialoguePlayerSystem::DialogueChoice(int32 ChoiceIndex) {
-  check(ChoiceIndex >= 0 && ChoiceIndex < DialogueDataArr[CurrentDialogueIndex].ChoicesAmount);
+void UDialoguePlayerSystem::DialogueChoice(int32 ChoiceIndex) {
+  check(ChoiceIndex >= 0 && ChoiceIndex < DialogueDataArr[CurrDialogueIndex].BranchChildrenAmount);
   check(DialogueState == EDialogueState::PlayerChoice);
 
-  const TArray<int32>& ChildChoiceIndexes = GetChildChoiceIndexes(DialogueDataArr, CurrentDialogueIndex + 1,
-                                                                  DialogueDataArr[CurrentDialogueIndex].ChoicesAmount);
+  const TArray<int32>& ChildChoiceIndexes = GetChildChoiceIndexes(DialogueDataArr, CurrDialogueIndex);
   int32 ChoiceDialogueIndex = ChildChoiceIndexes[ChoiceIndex];
 
-  ChoiceDialoguesSelectedIDs.Add(DialogueDataArr[ChoiceDialogueIndex].DialogueID);
-
-  CurrentDialogueIndex = ChoiceDialogueIndex;
+  CurrDialogueIndex = ChoiceDialogueIndex;
   NextDialogue();
-  return {DialogueDataArr[CurrentDialogueIndex], DialogueState};
 }
 
-TArray<FDialogueData> UDialoguePlayerSystem::GetInquireDialogues() {
+auto UDialoguePlayerSystem::GetInquireDialogues() -> TArray<FDialogueData> {
   check(DialogueState == EDialogueState::PlayerInquire);
 
-  const TArray<int32>& ChildInquireIndexes = GetChildInquireIndexes(DialogueDataArr, CurrentDialogueIndex);
+  const TArray<int32>& ChildInquireIndexes = GetChildInquireIndexes(DialogueDataArr, CurrDialogueIndex);
   TArray<FDialogueData> InquireDialogueArr = {};
   InquireDialogueArr.Reserve(ChildInquireIndexes.Num());
   for (int32 InquireIndex : ChildInquireIndexes) InquireDialogueArr.Add(DialogueDataArr[InquireIndex]);
 
   return InquireDialogueArr;
 }
-FNextDialogueRes UDialoguePlayerSystem::InquireDialogue(int32 InquireIndex) {
-  check(InquireIndex >= 0 && InquireIndex < DialogueDataArr[CurrentDialogueIndex].ChoicesAmount);
+void UDialoguePlayerSystem::InquireDialogue(int32 InquireIndex) {
+  check(InquireIndex >= 0 && InquireIndex < DialogueDataArr[CurrDialogueIndex].BranchChildrenAmount);
   check(DialogueState == EDialogueState::PlayerInquire);
 
-  const TArray<int32>& ChildInquireIndexes = GetChildInquireIndexes(DialogueDataArr, CurrentDialogueIndex);
-  CurrentDialogueIndex = ChildInquireIndexes[InquireIndex];
+  const TArray<int32>& ChildInquireIndexes = GetChildInquireIndexes(DialogueDataArr, CurrDialogueIndex);
+  CurrDialogueIndex = ChildInquireIndexes[InquireIndex];
   NextDialogue();
-  return {DialogueDataArr[CurrentDialogueIndex], DialogueState};
 }
 
 void UDialoguePlayerSystem::ResetDialogue() {
   DialogueC = nullptr;
   DialogueState = EDialogueState::None;
   DialogueDataArr.Empty();
-  CurrentDialogueIndex = 0;
+  CurrDialogueIndex = 0;
   InquireBlockIndexes.Empty();
-  ChoiceDialoguesSelectedIDs.Empty();
 }

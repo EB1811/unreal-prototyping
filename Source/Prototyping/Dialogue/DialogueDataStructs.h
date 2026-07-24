@@ -11,8 +11,7 @@
 UENUM()
 enum class EDialogueState : uint8 {
   None UMETA(DisplayName = "NONE"),
-  NPCTalk UMETA(DisplayName = "NPC Talk"),
-  PlayerTalk UMETA(DisplayName = "Player Talk"),
+  Dialogue UMETA(DisplayName = "Dialogue"),
   PlayerChoice UMETA(DisplayName = "Player Choice"),
   PlayerInquire UMETA(DisplayName = "Player Inquire"),
   EndPlayerInquire UMETA(DisplayName = "End Player Inquire"),
@@ -21,9 +20,8 @@ enum class EDialogueState : uint8 {
 UENUM()
 enum class EDialogueAction : uint8 {
   None UMETA(DisplayName = "NONE"),
-  NPCNext UMETA(DisplayName = "NPC Next"),
-  PlayerNext UMETA(DisplayName = "Player Next"),
-  AskPlayer UMETA(DisplayName = "Ask Player"),
+  NextDialogue UMETA(DisplayName = "Dialogue Next"),
+  StartPlayerChoice UMETA(DisplayName = "Start Player Choice"),
   StartPlayerInquire UMETA(DisplayName = "Start Player Inquire"),
   EndPlayerInquire UMETA(DisplayName = "End Player Inquire"),  // Ends the whole inquire block.
   End UMETA(DisplayName = "End"),  // Ends the dialogue, ending the whole chain or returning to the inquire block.
@@ -39,6 +37,7 @@ enum class EDialogueType : uint8 {
   Dialogue UMETA(DisplayName = "Dialogue"),
   Choice UMETA(DisplayName = "Choice"),
   Inquire UMETA(DisplayName = "Inquire"),
+  Pointer UMETA(DisplayName = "Pointer"),  // Consumes the pointed node to return the children.
 };
 
 UENUM()
@@ -82,7 +81,9 @@ struct FDialogueData {
   FText SpeakerName;  // * Override
 
   UPROPERTY(EditAnywhere, SaveGame)
-  int32 ChoicesAmount;
+  int32 BranchChildrenAmount;
+  UPROPERTY(EditAnywhere, SaveGame)
+  FName PointerID;  // * For pointer type dialogues.
 
   UPROPERTY(EditAnywhere, SaveGame)
   FGameplayTagContainer DialogueTags;
@@ -109,7 +110,7 @@ struct FDialogueDataTable : public FTableRowBase {
   FText SpeakerName;  // * Override
 
   UPROPERTY(EditAnywhere)
-  int32 ChoicesAmount;  // Note: To know number of children in a preorder tree traversal.
+  int32 BranchChildrenAmount;  // Note: To know number of children in a preorder tree traversal.
   UPROPERTY(EditAnywhere)
   int32 ChoiceIndex;  // Note: This is really just for nicer understanding in the data table.
 

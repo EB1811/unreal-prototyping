@@ -4,6 +4,7 @@
 #include "Prototyping/UI/InGameHud/InGameHudWidget.h"
 #include "Prototyping/UI/PauseMenu/PauseMenuViewWidget.h"
 #include "Prototyping/UI/TestHudWidget.h"
+#include "Prototyping/UI/Dialogue/DialogueViewWidget.h"
 #include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
 #include "Prototyping/Framework/Subsystems/GameStateSubsystem.h"
 #include "Components/PanelWidget.h"
@@ -49,21 +50,27 @@ void AInGameControlHUD::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
 void AInGameControlHUD::InitUIWidgets() {
   check(InGameHudWidgetClass);
   check(PauseMenuViewWidgetClass);
+  check(TestHudWidgetClass);
+  check(DialogueViewWidgetClass);
 
   InGameHudWidget = CreateWidget<UInGameHudWidget>(GetWorld(), InGameHudWidgetClass);
   InGameHudWidget->AddToViewport(1);
   InGameHudWidget->SetVisibility(ESlateVisibility::Hidden);
+  InGameHudWidget->InitUI(InGameInputActions);
 
   PauseMenuViewWidget = CreateWidget<UPauseMenuViewWidget>(GetWorld(), PauseMenuViewWidgetClass);
   PauseMenuViewWidget->AddToViewport(50);
   PauseMenuViewWidget->SetVisibility(ESlateVisibility::Collapsed);
+  PauseMenuViewWidget->InitUI(InUIInputActions);
 
   TestHudWidget = CreateWidget<UTestHudWidget>(GetWorld(), TestHudWidgetClass);
   TestHudWidget->AddToViewport(100);
   TestHudWidget->SetVisibility(ESlateVisibility::Collapsed);
 
-  InGameHudWidget->InitUI(InGameInputActions);
-  PauseMenuViewWidget->InitUI(InUIInputActions);
+  DialogueViewWidget = CreateWidget<UDialogueViewWidget>(GetWorld(), DialogueViewWidgetClass);
+  DialogueViewWidget->AddToViewport(100);
+  DialogueViewWidget->SetVisibility(ESlateVisibility::Collapsed);
+  DialogueViewWidget->InitUI();
 }
 
 inline FUIBehaviour* GetUIBehaviour(UUserWidget* Widget) {
@@ -395,4 +402,11 @@ void AInGameControlHUD::OpenTestHudWidgetView() {
   if (OpenedViewWidgets.Contains(TestHudWidget)) return;
 
   OpenViewWidget(TestHudWidget);
+}
+
+void AInGameControlHUD::OpenDialogueViewWidget() {
+  check(DialogueViewWidget);
+  if (OpenedViewWidgets.Contains(DialogueViewWidget)) return;
+
+  OpenViewWidget(DialogueViewWidget);
 }

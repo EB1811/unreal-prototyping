@@ -251,11 +251,11 @@ auto APlayerCharacter::IsInteractable(const UInteractionComponent* Interactable)
     case EInteractionType::None: return false; break;
     default: break;
   }
-
   return true;
 }
 void APlayerCharacter::HandleInteraction(UInteractionComponent* Interactable) {
   // PlayerWidgetComponent->SetVisibility(false, true);
+  UE_LOG(LogTemp, Warning, TEXT("HandleInteraction: %s"), *Interactable->GetName());
 
   Interactable->PlayInteractionSound();
   switch (Interactable->InteractionType) {
@@ -282,6 +282,7 @@ void APlayerCharacter::EnterDialogue(UDialogueComponent* DialogueC,
   }
 
   // DialoguePlayerSystem->StartDialogue(DialogueC, OnDialogueCloseFunc, OnDialogueFinishFunc);
+  DialoguePlayerSystem->StartDialogue(DialogueC);
 }
 // For dialogue outside of the dialogue component (cutscenes, etc.).
 void APlayerCharacter::EnterDialogue(const TArray<FDialogueData> DialogueDataArr,
@@ -295,5 +296,4 @@ void APlayerCharacter::EnterDialogue(const TArray<FDialogueData> DialogueDataArr
   }
 
   DialoguePlayerSystem->StartDialogue(DialogueDataArr, _SpeakerName);
-  // ControlHUD->SetAndOpenDialogue(DialoguePlayerSystem, OnDialogueCloseFunc, OnDialogueFinishFunc);
 }

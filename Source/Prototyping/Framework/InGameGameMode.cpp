@@ -2,6 +2,7 @@
 #include "InGameGameMode.h"
 #include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
 #include "Prototyping/Framework/UtilFuncs.h"
+#include "Prototyping/Dialogue/DialoguePlayerSystem.h"
 #include "Prototyping/Player/PlayerCharacter.h"
 #include "Prototyping/UI/InGameControlHUD.h"
 #include "Engine/LocalPlayer.h"
@@ -19,9 +20,11 @@ void AInGameGameMode::BeginPlay() {
 
   PlayerCharacter = Cast<APlayerCharacter>(GetWorld()->GetFirstPlayerController()->GetPawn());
 
+  UDialoguePlayerSystem* DialogueSystem = NewObject<UDialoguePlayerSystem>(this);
+  PlayerCharacter->DialoguePlayerSystem = DialogueSystem;
+
   ControlHUD = Cast<AInGameControlHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
   ControlHUD->InitUIWidgets();
-
   UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
   ControlHUDSubsystem->RegisterHUD(ControlHUD);
 

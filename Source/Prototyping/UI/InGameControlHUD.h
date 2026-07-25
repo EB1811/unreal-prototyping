@@ -33,6 +33,8 @@ public:
   TSubclassOf<class UPauseMenuViewWidget> PauseMenuViewWidgetClass;
   UPROPERTY(EditAnywhere, Category = "Widgets", meta = (DisplayPriority = 1))
   TSubclassOf<class UTestHudWidget> TestHudWidgetClass;
+  UPROPERTY(EditAnywhere, Category = "Widgets", meta = (DisplayPriority = 1))
+  TSubclassOf<class UDialogueViewWidget> DialogueViewWidgetClass;
 
   UPROPERTY(EditAnywhere)
   EHUDState HUDState;
@@ -118,4 +120,9 @@ public:
   class UTestHudWidget* TestHudWidget;
   UFUNCTION(BlueprintCallable)
   void OpenTestHudWidgetView();
+
+  UPROPERTY()
+  class UDialogueViewWidget* DialogueViewWidget;
+  UFUNCTION(BlueprintCallable)
+  void OpenDialogueViewWidget();
 };

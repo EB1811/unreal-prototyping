@@ -74,7 +74,7 @@ void UDialoguePlayerSystem::StartDialogue(class UDialogueComponent* _DialogueC) 
 
   UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
   AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
-  // ControlHUD->UpdateAndOpenDialogue();
+  ControlHUD->OpenDialogueViewWidget();
 }
 
 void UDialoguePlayerSystem::NextDialogue() {

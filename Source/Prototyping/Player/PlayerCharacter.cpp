@@ -118,7 +118,9 @@ void APlayerCharacter::StopMove(const FInputActionValue& Value) {
   // GetWorld()->GetTimerManager().ClearTimer(FootstepAudioTimer);
 }
 
-void APlayerCharacter::Interact(const FInputActionValue& Value) {}
+void APlayerCharacter::Interact(const FInputActionValue& Value) {
+  if (CheckForPrioritisedInteraction()) HandleInteraction(CurrentInteractableC);
+}
 void APlayerCharacter::CinematicView(const FInputActionValue& Value) {}
 
 void APlayerCharacter::OpenPauseMenu(const FInputActionValue& Value) {

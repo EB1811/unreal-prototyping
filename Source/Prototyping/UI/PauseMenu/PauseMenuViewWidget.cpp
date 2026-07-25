@@ -94,13 +94,14 @@ void UPauseMenuViewWidget::InitUI(FInUIInputActions _InUIInputActions) { InUIInp
 
 void UPauseMenuViewWidget::SetupUIActionable() {
   UIActionable.AdvanceUI = [this]() {
-    if (SettingsWidget->GetVisibility() == ESlateVisibility::Visible) {
-      UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
-      AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
-      ControlHUD->AdvanceUIAction(SettingsWidget);
-    } else {
-      SelectHoveredButton();
-    }
+    SelectHoveredButton();
+    // if (SettingsWidget->GetVisibility() == ESlateVisibility::Visible) {
+    //   UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
+    //   AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
+    //   ControlHUD->AdvanceUIAction(SettingsWidget);
+    // } else {
+    //   SelectHoveredButton();
+    // }
   };
   UIActionable.DirectionalInput = [this](FVector2D Direction) { HoverNextButton(Direction); };
 }

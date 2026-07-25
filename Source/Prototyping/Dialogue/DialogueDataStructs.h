@@ -40,23 +40,14 @@ enum class EDialogueType : uint8 {
   Pointer UMETA(DisplayName = "Pointer"),  // Consumes the pointed node to return the children.
 };
 
-UENUM()
-enum class EGameEffectType : uint8 {
-  None UMETA(DisplayName = "NONE"),
-  AddPlayerTag UMETA(DisplayName = "Add Player Tag"),
-  RemovePlayerTag UMETA(DisplayName = "Remove Player Tag"),
-  PlaySound UMETA(DisplayName = "Play Sound"),
-  PlayMusic UMETA(DisplayName = "Play Music"),
-  Script UMETA(DisplayName = "Script"),  // VordieScript.
-};
 USTRUCT()
-struct FDialogueEffect {
+struct FDialogueScriptData {
   GENERATED_BODY()
 
   UPROPERTY(EditAnywhere, SaveGame)
-  EGameEffectType GameEffectType;
+  FString RequirementsScript;  // * To be met for this dialogue to be available.
   UPROPERTY(EditAnywhere, SaveGame)
-  FName RelevantID;
+  FString GameActionScript;  // * Action to be executed when this dialogue is consumed.
 };
 
 USTRUCT()
@@ -86,6 +77,9 @@ struct FDialogueData {
   FName PointerID;  // * For pointer type dialogues.
 
   UPROPERTY(EditAnywhere, SaveGame)
+  FDialogueScriptData ScriptData;
+
+  UPROPERTY(EditAnywhere, SaveGame)
   FGameplayTagContainer DialogueTags;
 };
 USTRUCT()
@@ -113,6 +107,11 @@ struct FDialogueDataTable : public FTableRowBase {
   int32 BranchChildrenAmount;  // Note: To know number of children in a preorder tree traversal.
   UPROPERTY(EditAnywhere)
   int32 ChoiceIndex;  // Note: This is really just for nicer understanding in the data table.
+  UPROPERTY(EditAnywhere, SaveGame)
+  FName PointerID;  // * For pointer type dialogues.
+
+  UPROPERTY(EditAnywhere, SaveGame)
+  FDialogueScriptData ScriptData;
 
   UPROPERTY(EditAnywhere)
   FGameplayTagContainer DialogueTags;

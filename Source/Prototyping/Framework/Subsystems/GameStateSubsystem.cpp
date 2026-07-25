@@ -9,5 +9,5 @@ void UGameStateSubsystem::ChangeGameState(EGlobalGameState NewGameState) {
 
   PrevGameState = CurrGameState;
   CurrGameState = NewGameState;
-  GameStateChangedDelegate.Broadcast(PrevGameState, NewGameState);
+  GameStateChangedDelegate.Broadcast(PrevGameState, CurrGameState);
 }

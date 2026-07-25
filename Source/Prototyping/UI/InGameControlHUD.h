@@ -49,8 +49,8 @@ public:
   void InitUIWidgets();  // * Some stuff needs to be set up after all unreal funcs are called.
 
   // * Widget visibility and animation handling.
-  void ShowWidget(class UUserWidget* Widget);
-  void HideWidget(class UUserWidget* Widget);
+  void ShowWidget(class UUserWidget* Widget, TFunction<void()> OnShowAnimCompleteFunc = nullptr);
+  void HideWidget(class UUserWidget* Widget, TFunction<void()> OnHideAnimCompleteFunc = nullptr);
   FWidgetAnimationDynamicEvent UIShowAnimCompleteEvent;
   UFUNCTION()
   void UIShowAnimComplete();

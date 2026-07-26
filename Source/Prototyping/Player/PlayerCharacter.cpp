@@ -123,11 +123,7 @@ void APlayerCharacter::Interact(const FInputActionValue& Value) {
 }
 void APlayerCharacter::CinematicView(const FInputActionValue& Value) {}
 
-void APlayerCharacter::OpenPauseMenu(const FInputActionValue& Value) {
-  if (!ControlHUD) return;
-
-  ControlHUD->OpenPauseMenuView();
-}
+void APlayerCharacter::OpenPauseMenu(const FInputActionValue& Value) { ControlHUD->OpenPauseMenuView(); }
 void APlayerCharacter::AdvanceUI(const FInputActionValue& Value) { ControlHUD->AdvanceUIAction(); }
 void APlayerCharacter::AdvanceUIHold(const FInputActionValue& Value) { ControlHUD->AdvanceUIHoldAction(); }
 void APlayerCharacter::RetractUIAction(const FInputActionValue& Value) { ControlHUD->RetractUIAction(); }
@@ -265,35 +261,10 @@ void APlayerCharacter::HandleInteraction(UInteractionComponent* Interactable) {
     }
     case EInteractionType::Dialogue: {
       auto DialogueC = Interactable->InteractDialogue();
-      EnterDialogue(DialogueC.GetValue());
+
+      DialoguePlayerSystem->StartDialogue(DialogueC.GetValue(), [this]() { ControlHUD->OpenPauseMenuView(); });
       break;
     }
     default: checkNoEntry();
   }
-}
-
-void APlayerCharacter::EnterDialogue(UDialogueComponent* DialogueC,
-                                     TFunction<void()> OnDialogueCloseFunc,
-                                     TFunction<void()> OnDialogueFinishFunc) {
-  if (DialogueC->DialogueArray.Num() == 0) {
-    if (OnDialogueCloseFunc) OnDialogueCloseFunc();
-    if (OnDialogueFinishFunc) OnDialogueFinishFunc();
-    return;
-  }
-
-  // DialoguePlayerSystem->StartDialogue(DialogueC, OnDialogueCloseFunc, OnDialogueFinishFunc);
-  DialoguePlayerSystem->StartDialogue(DialogueC);
-}
-// For dialogue outside of the dialogue component (cutscenes, etc.).
-void APlayerCharacter::EnterDialogue(const TArray<FDialogueData> DialogueDataArr,
-                                     TFunction<void()> OnDialogueCloseFunc,
-                                     TFunction<void()> OnDialogueFinishFunc,
-                                     const FString& _SpeakerName) {
-  if (DialogueDataArr.Num() == 0) {
-    if (OnDialogueCloseFunc) OnDialogueCloseFunc();
-    if (OnDialogueFinishFunc) OnDialogueFinishFunc();
-    return;
-  }
-
-  DialoguePlayerSystem->StartDialogue(DialogueDataArr, _SpeakerName);
 }

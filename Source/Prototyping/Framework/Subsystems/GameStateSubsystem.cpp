@@ -4,8 +4,8 @@
 void UGameStateSubsystem::ChangeGameState(EGlobalGameState NewGameState) {
   if (CurrGameState == NewGameState) return;
 
-  if (NewGameState == EGlobalGameState::Paused) UGameplayStatics::SetGamePaused(GetWorld(), true);
   if (CurrGameState == EGlobalGameState::Paused) UGameplayStatics::SetGamePaused(GetWorld(), false);
+  if (NewGameState == EGlobalGameState::Paused) UGameplayStatics::SetGamePaused(GetWorld(), true);
 
   PrevGameState = CurrGameState;
   CurrGameState = NewGameState;

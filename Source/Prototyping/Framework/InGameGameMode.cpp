@@ -20,11 +20,13 @@ void AInGameGameMode::BeginPlay() {
 
   PlayerCharacter = Cast<APlayerCharacter>(GetWorld()->GetFirstPlayerController()->GetPawn());
 
-  UDialoguePlayerSystem* DialogueSystem = NewObject<UDialoguePlayerSystem>(this);
-  PlayerCharacter->DialoguePlayerSystem = DialogueSystem;
+  UDialoguePlayerSystem* DialoguePlayerSystem = NewObject<UDialoguePlayerSystem>(this);
+  PlayerCharacter->DialoguePlayerSystem = DialoguePlayerSystem;
 
   ControlHUD = Cast<AInGameControlHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
+  ControlHUD->DialoguePlayerSystem = DialoguePlayerSystem;
   ControlHUD->InitUIWidgets();
+
   UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
   ControlHUDSubsystem->RegisterHUD(ControlHUD);
 

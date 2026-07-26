@@ -15,6 +15,9 @@ class PROTOTYPING_API UDialogueViewWidget : public UUserWidget {
 public:
   virtual void NativeOnInitialized() override;
 
+  UPROPERTY(meta = (BindWidget))
+  class UButton* NextButton;
+
   UPROPERTY(Transient, meta = (BindWidgetAnim))
   class UWidgetAnimation* ShowAnim;
   UPROPERTY(Transient, meta = (BindWidgetAnim))
@@ -24,9 +27,15 @@ public:
   UPROPERTY(EditAnywhere)
   class USoundBase* HideSound;
 
+  UPROPERTY(EditAnywhere)
+  class UDialoguePlayerSystem* DialoguePlayerSystem;
+
+  UFUNCTION()
+  void Next();
+
   void RefreshUI();
   void UpdateUI();
-  void InitUI();
+  void InitUI(class UDialoguePlayerSystem* _DialoguePlayerSystem);
 
   UPROPERTY(EditAnywhere)
   FUIActionable UIActionable;

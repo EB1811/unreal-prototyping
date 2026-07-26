@@ -70,7 +70,7 @@ void AInGameControlHUD::InitUIWidgets() {
   DialogueViewWidget = CreateWidget<UDialogueViewWidget>(GetWorld(), DialogueViewWidgetClass);
   DialogueViewWidget->AddToViewport(100);
   DialogueViewWidget->SetVisibility(ESlateVisibility::Collapsed);
-  DialogueViewWidget->InitUI();
+  DialogueViewWidget->InitUI(DialoguePlayerSystem);
 }
 
 inline FUIBehaviour* GetUIBehaviour(UUserWidget* Widget) {

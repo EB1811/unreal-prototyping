@@ -48,6 +48,9 @@ public:
   UPROPERTY(EditAnywhere)
   FInUIInputActions InUIInputActions;
 
+  UPROPERTY(EditAnywhere)
+  class UDialoguePlayerSystem* DialoguePlayerSystem;
+
   void InitUIWidgets();  // * Some stuff needs to be set up after all unreal funcs are called.
 
   // * Widget visibility and animation handling.

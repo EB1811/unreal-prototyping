@@ -106,19 +106,13 @@ void UDialoguePlayerSystem::NextDialogue() {
 
   if (CurrDialogueIndex + 1 < DialogueDataArr.Num() &&
       DialogueDataArr[CurrDialogueIndex + 1].DialogueType == EDialogueType::Pointer) {
-    switch (DialogueState) {
-      case EDialogueState::Dialogue:
-      case EDialogueState::PlayerChoice:
-      case EDialogueState::PlayerInquire: {
-        FName PointerID = DialogueDataArr[CurrDialogueIndex + 1].PointerID;
-        int32 PointerIndex = DialogueDataArr.IndexOfByPredicate(
-            [PointerID](const FDialogueData& Dialogue) { return Dialogue.DialogueID == PointerID; });
-        check(PointerIndex != INDEX_NONE);
+    FName PointerID = DialogueDataArr[CurrDialogueIndex + 1].PointerID;
+    int32 PointerIndex = DialogueDataArr.IndexOfByPredicate(
+        [PointerID](const FDialogueData& Dialogue) { return Dialogue.DialogueID == PointerID; });
+    check(PointerIndex != INDEX_NONE);
 
-        CurrDialogueIndex = PointerIndex;
-        break;
-      }
-    }
+    CurrDialogueIndex = PointerIndex;
+    if (DialogueState == EDialogueState::Dialogue) return;
   }
 
   switch (DialogueState) {

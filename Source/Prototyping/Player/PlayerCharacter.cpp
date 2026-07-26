@@ -262,7 +262,7 @@ void APlayerCharacter::HandleInteraction(UInteractionComponent* Interactable) {
     case EInteractionType::Dialogue: {
       auto DialogueC = Interactable->InteractDialogue();
 
-      DialoguePlayerSystem->StartDialogue(DialogueC.GetValue(), [this]() { ControlHUD->OpenPauseMenuView(); });
+      DialoguePlayerSystem->StartDialogue(DialogueC.GetValue());
       break;
     }
     default: checkNoEntry();

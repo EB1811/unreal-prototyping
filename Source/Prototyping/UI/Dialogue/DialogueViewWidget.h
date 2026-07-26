@@ -16,6 +16,8 @@ public:
   virtual void NativeOnInitialized() override;
 
   UPROPERTY(meta = (BindWidget))
+  class UTextBlock* DialogueText;
+  UPROPERTY(meta = (BindWidget))
   class UButton* NextButton;
 
   UPROPERTY(Transient, meta = (BindWidgetAnim))
@@ -32,6 +34,10 @@ public:
 
   UFUNCTION()
   void Next();
+  UFUNCTION()
+  void Select(int32 SelectIndex);
+  UFUNCTION()
+  void Close();
 
   void RefreshUI();
   void UpdateUI();

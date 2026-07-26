@@ -408,5 +408,7 @@ void AInGameControlHUD::OpenDialogueViewWidget() {
   check(DialogueViewWidget);
   if (OpenedViewWidgets.Contains(DialogueViewWidget)) return;
 
+  DialogueViewWidget->RefreshUI();
+
   OpenViewWidget(DialogueViewWidget);
 }

@@ -30,7 +30,7 @@ public:
   class USoundBase* HideSound;
 
   UPROPERTY(EditAnywhere)
-  class UDialoguePlayerSystem* DialoguePlayerSystem;
+  class ADialogueSystem* DialogueSystem;
 
   UFUNCTION()
   void Next();
@@ -41,7 +41,7 @@ public:
 
   void RefreshUI();
   void UpdateUI();
-  void InitUI(class UDialoguePlayerSystem* _DialoguePlayerSystem);
+  void InitUI(class ADialogueSystem* _DialogueSystem);
 
   UPROPERTY(EditAnywhere)
   FUIActionable UIActionable;

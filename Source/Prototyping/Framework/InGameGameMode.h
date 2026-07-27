@@ -15,6 +15,9 @@ public:
 
   virtual void BeginPlay() override;
 
+  UPROPERTY(EditAnywhere, Category = "BP Classes")
+  TSubclassOf<class ADialogueSystem> DialogueSystemClass;
+
   UPROPERTY()
   class APlayerCharacter* PlayerCharacter;
   UPROPERTY()

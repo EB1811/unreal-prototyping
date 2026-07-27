@@ -1,4 +1,4 @@
-#include "DialoguePlayerSystem.h"
+#include "DialogueSystem.h"
 #include "DialogueDataStructs.h"
 #include "DialogueComponent.h"
 #include "HAL/Platform.h"
@@ -51,7 +51,10 @@ inline auto GetChildInquireIndexes(const TArray<FDialogueData>& DialogueDataArr,
                                      EDialogueAction::StartPlayerInquire);
 }
 
-void UDialoguePlayerSystem::StartDialogue() {
+void ADialogueSystem::BeginPlay() { Super::BeginPlay(); }
+void ADialogueSystem::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
+
+void ADialogueSystem::StartDialogue() {
   if (DialogueDataArr.Num() == 0) {
     if (DialogueClosedFunc) DialogueClosedFunc();
     if (DialogueFinishedFunc) DialogueFinishedFunc();
@@ -70,10 +73,10 @@ void UDialoguePlayerSystem::StartDialogue() {
   AInGameControlHUD* ControlHUD = Cast<AInGameControlHUD>(ControlHUDSubsystem->GetHUD());
   ControlHUD->OpenDialogueViewWidget();
 }
-void UDialoguePlayerSystem::StartDialogue(const TArray<FDialogueData> _DialogueDataArr,
-                                          const FString& _SpeakerName,
-                                          TFunction<void()> _DialogueClosedFunc,
-                                          TFunction<void()> _DialogueFinishedFunc) {
+void ADialogueSystem::StartDialogue(const TArray<FDialogueData> _DialogueDataArr,
+                                    const FString& _SpeakerName,
+                                    TFunction<void()> _DialogueClosedFunc,
+                                    TFunction<void()> _DialogueFinishedFunc) {
   check(_DialogueDataArr.Num() > 0);
 
   ResetDialogue();
@@ -85,9 +88,9 @@ void UDialoguePlayerSystem::StartDialogue(const TArray<FDialogueData> _DialogueD
 
   StartDialogue();
 }
-void UDialoguePlayerSystem::StartDialogue(class UDialogueComponent* _DialogueC,
-                                          TFunction<void()> _DialogueClosedFunc,
-                                          TFunction<void()> _DialogueFinishedFunc) {
+void ADialogueSystem::StartDialogue(class UDialogueComponent* _DialogueC,
+                                    TFunction<void()> _DialogueClosedFunc,
+                                    TFunction<void()> _DialogueFinishedFunc) {
   check(_DialogueC && _DialogueC->DialogueArray.Num() > 0);
 
   ResetDialogue();
@@ -101,7 +104,7 @@ void UDialoguePlayerSystem::StartDialogue(class UDialogueComponent* _DialogueC,
   StartDialogue();
 }
 
-void UDialoguePlayerSystem::NextDialogue() {
+void ADialogueSystem::NextDialogue() {
   DialogueState = GetNextDialogueState(DialogueState, DialogueDataArr[CurrDialogueIndex].Action);
 
   if (CurrDialogueIndex + 1 < DialogueDataArr.Num() &&
@@ -157,7 +160,7 @@ void UDialoguePlayerSystem::NextDialogue() {
   }
 }
 
-auto UDialoguePlayerSystem::GetChoiceDialogues() -> TArray<FDialogueData> {
+auto ADialogueSystem::GetChoiceDialogues() -> TArray<FDialogueData> {
   if (DialogueState != EDialogueState::PlayerChoice) return {};
 
   const TArray<int32>& ChildChoiceIndexes = GetChildChoiceIndexes(DialogueDataArr, CurrDialogueIndex);
@@ -167,7 +170,7 @@ auto UDialoguePlayerSystem::GetChoiceDialogues() -> TArray<FDialogueData> {
 
   return ChoiceDialogueArr;
 }
-void UDialoguePlayerSystem::DialogueChoice(int32 ChoiceIndex) {
+void ADialogueSystem::DialogueChoice(int32 ChoiceIndex) {
   check(ChoiceIndex >= 0 && ChoiceIndex < DialogueDataArr[CurrDialogueIndex].BranchChildrenAmount);
   check(DialogueState == EDialogueState::PlayerChoice);
 
@@ -177,8 +180,7 @@ void UDialoguePlayerSystem::DialogueChoice(int32 ChoiceIndex) {
   CurrDialogueIndex = ChoiceDialogueIndex;
   NextDialogue();
 }
-
-auto UDialoguePlayerSystem::GetInquireDialogues() -> TArray<FDialogueData> {
+auto ADialogueSystem::GetInquireDialogues() -> TArray<FDialogueData> {
   check(DialogueState == EDialogueState::PlayerInquire);
 
   const TArray<int32>& ChildInquireIndexes = GetChildInquireIndexes(DialogueDataArr, CurrDialogueIndex);
@@ -188,7 +190,7 @@ auto UDialoguePlayerSystem::GetInquireDialogues() -> TArray<FDialogueData> {
 
   return InquireDialogueArr;
 }
-void UDialoguePlayerSystem::InquireDialogue(int32 InquireIndex) {
+void ADialogueSystem::InquireDialogue(int32 InquireIndex) {
   check(InquireIndex >= 0 && InquireIndex < DialogueDataArr[CurrDialogueIndex].BranchChildrenAmount);
   check(DialogueState == EDialogueState::PlayerInquire);
 
@@ -197,19 +199,19 @@ void UDialoguePlayerSystem::InquireDialogue(int32 InquireIndex) {
   NextDialogue();
 }
 
-void UDialoguePlayerSystem::CloseDialogue() {
+void ADialogueSystem::CloseDialogue() {
   if (DialogueC) DialogueC->FinishReadingDialogueChain();
 
   if (DialogueClosedFunc) DialogueClosedFunc();
 }
-void UDialoguePlayerSystem::FinishDialogue() {
+void ADialogueSystem::FinishDialogue() {
   if (DialogueC) DialogueC->FinishReadingDialogueChain();
 
   if (DialogueClosedFunc) DialogueClosedFunc();
   if (DialogueFinishedFunc) DialogueFinishedFunc();
 }
 
-void UDialoguePlayerSystem::ResetDialogue() {
+void ADialogueSystem::ResetDialogue() {
   DialogueC = nullptr;
   DialogueState = EDialogueState::None;
   DialogueDataArr.Empty();

@@ -1,15 +1,16 @@
 
 #include "InGameGameMode.h"
-#include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
-#include "Prototyping/Framework/UtilFuncs.h"
-#include "Prototyping/Dialogue/DialoguePlayerSystem.h"
-#include "Prototyping/Player/PlayerCharacter.h"
-#include "Prototyping/UI/InGameControlHUD.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedInputComponent.h"
+#include "UserSettings/EnhancedInputUserSettings.h"
+#include "Prototyping/Framework/Subsystems/ControlHUDSubsystem.h"
+#include "Prototyping/Framework/UtilFuncs.h"
+#include "Prototyping/Dialogue/DialogueSystem.h"
+#include "Prototyping/Player/PlayerCharacter.h"
+#include "Prototyping/UI/InGameControlHUD.h"
 
 AInGameGameMode::AInGameGameMode() {}
 
@@ -20,11 +21,11 @@ void AInGameGameMode::BeginPlay() {
 
   PlayerCharacter = Cast<APlayerCharacter>(GetWorld()->GetFirstPlayerController()->GetPawn());
 
-  UDialoguePlayerSystem* DialoguePlayerSystem = NewObject<UDialoguePlayerSystem>(this);
-  PlayerCharacter->DialoguePlayerSystem = DialoguePlayerSystem;
+  ADialogueSystem* DialogueSystem = GetWorld()->SpawnActor<ADialogueSystem>(DialogueSystemClass);
+  PlayerCharacter->DialogueSystem = DialogueSystem;
 
   ControlHUD = Cast<AInGameControlHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
-  ControlHUD->DialoguePlayerSystem = DialoguePlayerSystem;
+  ControlHUD->DialogueSystem = DialogueSystem;
   ControlHUD->InitUIWidgets();
 
   UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
@@ -32,4 +33,9 @@ void AInGameGameMode::BeginPlay() {
 
   UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
       GetWorld()->GetFirstPlayerController()->GetLocalPlayer());
+  check(Subsystem);
+  UEnhancedInputUserSettings* EISettings = Subsystem->GetUserSettings();
+  check(EISettings);
+  for (const auto& StateContext : PlayerCharacter->InputContexts)
+    EISettings->RegisterInputMappingContext(StateContext.Value);
 }

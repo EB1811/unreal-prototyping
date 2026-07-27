@@ -7,7 +7,7 @@
 #include "Prototyping/Framework/UtilFuncs.h"
 #include "Prototyping/Interaction/InteractionComponent.h"
 #include "Prototyping/Dialogue/DialogueComponent.h"
-#include "Prototyping/Dialogue/DialoguePlayerSystem.h"
+#include "Prototyping/Dialogue/DialogueSystem.h"
 #include "Prototyping/Dialogue/DialogueDataStructs.h"
 #include "Prototyping/UI/InGameControlHUD.h"
 #include "Prototyping/Framework/Subsystems/GameStateSubsystem.h"
@@ -262,7 +262,7 @@ void APlayerCharacter::HandleInteraction(UInteractionComponent* Interactable) {
     case EInteractionType::Dialogue: {
       auto DialogueC = Interactable->InteractDialogue();
 
-      DialoguePlayerSystem->StartDialogue(DialogueC.GetValue());
+      DialogueSystem->StartDialogue(DialogueC.GetValue());
       break;
     }
     default: checkNoEntry();

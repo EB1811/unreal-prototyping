@@ -49,7 +49,7 @@ public:
   FInUIInputActions InUIInputActions;
 
   UPROPERTY(EditAnywhere)
-  class UDialoguePlayerSystem* DialoguePlayerSystem;
+  class ADialogueSystem* DialogueSystem;
 
   void InitUIWidgets();  // * Some stuff needs to be set up after all unreal funcs are called.
 

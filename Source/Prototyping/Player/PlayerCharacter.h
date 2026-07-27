@@ -104,7 +104,7 @@ public:
 
   // * Player systems.
   UPROPERTY(EditAnywhere)
-  class UDialoguePlayerSystem* DialoguePlayerSystem;
+  class ADialogueSystem* DialogueSystem;
 
   // * Components
   // UPROPERTY(EditAnywhere, Category = "Character | Components")

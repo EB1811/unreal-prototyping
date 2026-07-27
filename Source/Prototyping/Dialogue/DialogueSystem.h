@@ -3,15 +3,19 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameFramework/Info.h"
 #include "DialogueDataStructs.h"
-#include "DialoguePlayerSystem.generated.h"
+#include "DialogueSystem.generated.h"
 
 UCLASS(Blueprintable)
-class PROTOTYPING_API UDialoguePlayerSystem : public UObject {
+class PROTOTYPING_API ADialogueSystem : public AInfo {
   GENERATED_BODY()
 
 public:
-  UDialoguePlayerSystem() : DialogueState(EDialogueState::None), CurrDialogueIndex(0) {}
+  ADialogueSystem() { PrimaryActorTick.bCanEverTick = false; }
+
+  virtual void BeginPlay() override;
+  virtual void Tick(float DeltaTime) override;
 
   UPROPERTY(EditAnywhere)
   EDialogueState DialogueState;

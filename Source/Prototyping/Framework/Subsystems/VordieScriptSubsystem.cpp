@@ -92,7 +92,7 @@ inline auto ShouldEndStatement(const FString& Code, int32 Index, TArray<Token>& 
 
   return true;
 }
-inline auto Tokenize(const FString& Code) -> TArray<Token> {
+auto Tokenize(const FString& Code) -> TArray<Token> {
   int BracketDepth = 0;
   TArray<Token> Tokens;
   int32 i = 0;
@@ -257,6 +257,179 @@ struct Overload : Ts... {
 };
 template <typename... Ts>
 Overload(Ts...) -> Overload<Ts...>;
+
+inline auto ToExpr(OperandTokenType OperandTokenType, const OperandValue& Value) -> Expression {
+  Expression Expr;
+  Expr.Set<Operand>(Operand{OperandTokenType, Value});
+  return Expr;
+}
+inline auto ToExpr(OperatorTokenType OperatorTokenType, const FString& Value, TArray<Expression> Operands)
+    -> Expression {
+  Expression Expr;
+  Expr.Set<Operation>(Operation{OperatorTokenType, Value, Operands});
+  return Expr;
+}
+
+inline auto ExpressionToString(const Expression& Expr) -> FString {
+  return Visit(Overload{[](const Operand& Op) -> FString {
+                          switch (Op.Type) {
+                            case (OperandTokenType::Identifier): return Op.Value.Get<FString>();
+                            case (OperandTokenType::Number): return FString::FromInt(Op.Value.Get<int32>());
+                            case (OperandTokenType::String): return "'" + Op.Value.Get<FString>() + "'";
+                            case (OperandTokenType::Boolean): return Op.Value.Get<bool>() ? "true" : "false";
+                            default: return Op.Value.Get<FString>();
+                          }
+                        },
+                        [](const Operation& Op) -> FString {
+                          FString Result = "(" + Op.Value;
+                          for (const auto& Operand : Op.Operands) Result += " " + ExpressionToString(Operand);
+                          Result += ")";
+                          return Result;
+                        }},
+               Expr);
+};
+
+auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> Expression {
+  Token CurrentToken = Tokens[Index++];
+  Expression Left = Visit(
+      Overload{
+          [&](OperatorTokenType Op) -> Expression {
+            switch (Op) {
+              case (OperatorTokenType::LeftParen):
+              case (OperatorTokenType::LeftBrace): return ParseExpression(Tokens, Index, 0);
+              // Array literal
+              case (OperatorTokenType::LeftSquare): {
+                TArray<Expression> Elements;
+                while (Index < Tokens.Num()) {
+                  Elements.Push(ParseExpression(Tokens, Index, 0));
+
+                  // Explicitly check for closing square bracket to end array literal (closing bracket already consumed)
+                  if (TokenIs(Tokens[Index - 1], OperatorTokenType::RightSquare)) break;
+                  if (TokenIs(Tokens[Index], OperandTokenType::Eof) || TokenIs(Tokens[Index], OperandTokenType::Eol))
+                    break;
+
+                  Index++;
+                }
+                return ToExpr(Op, "array_literal", Elements);
+              }
+              // Unary
+              case (OperatorTokenType::Not):
+              case (OperatorTokenType::Plus):
+              case (OperatorTokenType::Minus):
+                return ToExpr(Op, CurrentToken.Value,
+                              {ParseExpression(Tokens, Index, UNARY_OPERATOR_TOKEN_BINDINGS[Op])});
+              default:
+                UE_LOG(LogTemp, Error, TEXT("Unexpected operator: %d at index %d"), static_cast<int>(Op), Index - 1);
+                checkNoEntry();
+                return ToExpr(Op, CurrentToken.Value, {});
+            }
+          },
+          [&](OperandTokenType Op) -> Expression {
+            OperandValue StrValue;
+            StrValue.Set<FString>(CurrentToken.Value);
+            switch (Op) {
+              case (OperandTokenType::Identifier): return ToExpr(Op, StrValue);
+              case (OperandTokenType::Number): {
+                OperandValue NumValue;
+                NumValue.Set<int32>(FCString::Atoi(*CurrentToken.Value));
+                return ToExpr(Op, NumValue);
+              }
+              case (OperandTokenType::String): return ToExpr(Op, StrValue);
+              case (OperandTokenType::Boolean): {
+                OperandValue BoolValue;
+                BoolValue.Set<bool>(CurrentToken.Value == "true");
+                return ToExpr(Op, BoolValue);
+              }
+              case (OperandTokenType::PipeVar): return ToExpr(Op, StrValue);
+              default:
+                UE_LOG(LogTemp, Error, TEXT("Unexpected operand: %d at index %d"), static_cast<int>(Op), Index - 1);
+                checkNoEntry();
+                return ToExpr(Op, StrValue);
+            }
+          }},
+      CurrentToken.Type);
+  UE_LOG(LogTemp, Log, TEXT("Parsed left expression: %s, at index: %d"), *ExpressionToString(Left), Index - 1);
+
+  while (Index < Tokens.Num()) {
+    Token NextToken = Tokens[Index];
+
+    if (TokenIs(NextToken, OperandTokenType::Eof) || TokenIs(NextToken, OperandTokenType::Eol)) break;
+
+    // Function call when: next token is an operand, or an open parenthesis.
+    if (NextToken.Type.IsType<OperandTokenType>() || (TokenIs(NextToken, OperatorTokenType::LeftParen))) {
+      if (TokenIs(NextToken, OperatorTokenType::LeftParen)) {
+        Index++;  // Consume the '('.
+        if (TokenIs(Tokens[Index], OperatorTokenType::RightParen)) {
+          Index++;  // Consume the ')'.
+          continue;
+        }
+      }
+
+      TArray<Expression> Args;
+      while (Index < Tokens.Num()) {
+        Args.Push(ParseExpression(Tokens, Index, 0));
+
+        if (TokenIs(Tokens[Index], OperandTokenType::Eof) || TokenIs(Tokens[Index], OperandTokenType::Eol)) break;
+        if (TokenIs(Tokens[Index], OperatorTokenType::Colon)) break;
+        // Closing parenthesis are already consumed.
+        if (TokenIs(Tokens[Index - 1], OperatorTokenType::RightParen) &&
+            !TokenIs(Tokens[Index - 2], OperatorTokenType::LeftParen))
+          break;
+
+        Index++;
+      }
+      Left = ToExpr(OperatorTokenType::LeftParen, "call", {Left, {ToExpr(OperatorTokenType::Comma, "args", Args)}});
+
+      continue;
+    }
+
+    if (NextToken.Type.IsType<OperatorTokenType>()) break;
+
+    OperatorTokenType NextOp = NextToken.Type.Get<OperatorTokenType>();
+    // Comma handling, means it's a function argument separator.
+    if (NextOp == OperatorTokenType::Comma) {
+      // Index++;
+      break;
+    }
+    // Closing parentheses/braces/brackets.
+    if (NextOp == OperatorTokenType::RightParen || NextOp == OperatorTokenType::RightSquare ||
+        NextOp == OperatorTokenType::RightBrace) {
+      Index++;
+      break;
+    }
+    int NextBP = OPERATOR_TOKEN_BINDINGS[NextOp];
+    if (NextBP < MinBP) break;
+    // Ternary operator
+    if (NextOp == OperatorTokenType::Question) {
+      Index++;  // Consume the '?'
+      Expression TrueExpr = ParseExpression(Tokens, Index, 0);
+      Index++;  // Consume the ':'
+      Expression FalseExpr = ParseExpression(Tokens, Index, 0);
+      Left = ToExpr(NextOp, NextToken.Value, {Left, TrueExpr, FalseExpr});
+      continue;
+    }
+    if (NextOp == OperatorTokenType::Colon) break;
+
+    Index++;
+    Expression Right = ParseExpression(Tokens, Index, NextBP + 1);
+    auto NewOp = ToExpr(NextOp, NextToken.Value, {Left, Right});
+    Left = NewOp;
+  };
+
+  return Left;
+};
+inline auto ParseTokensToScript(const TArray<Token>& Tokens) -> Script {
+  TArray<Expression> Expressions;
+  int32 Index = 0;
+  while (Index < Tokens.Num() && !TokenIs(Tokens[Index], OperandTokenType::Eof)) {
+    if (TokenIs(Tokens[Index], OperandTokenType::Eol)) {
+      Index++;
+      continue;
+    }
+    Expressions.Push(ParseExpression(Tokens, Index, 0));
+  }
+  return Script{Expressions};
+};
 
 UVordieScriptSubsystem::UVordieScriptSubsystem() {}
 

@@ -17,9 +17,17 @@ public:
 
   UPROPERTY(EditAnywhere, Category = "BP Classes")
   TSubclassOf<class ADialogueSystem> DialogueSystemClass;
+  UPROPERTY(EditAnywhere, Category = "BP Classes")
+  TSubclassOf<class ATestEnemyManager> TestEnemyManagerClass;
 
   UPROPERTY()
   class APlayerCharacter* PlayerCharacter;
   UPROPERTY()
   class AInGameControlHUD* ControlHUD;
+
+  UPROPERTY()
+  class ADialogueSystem* DialogueSystem;
+
+  UPROPERTY()
+  class ATestEnemyManager* TestEnemyManager;
 };

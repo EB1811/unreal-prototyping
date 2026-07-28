@@ -11,6 +11,7 @@
 #include "Prototyping/Dialogue/DialogueSystem.h"
 #include "Prototyping/Player/PlayerCharacter.h"
 #include "Prototyping/UI/InGameControlHUD.h"
+#include "Prototyping/AI/TestEnemyManager.h"
 
 AInGameGameMode::AInGameGameMode() {}
 
@@ -20,17 +21,26 @@ void AInGameGameMode::BeginPlay() {
   UE_LOG(LogTemp, Log, TEXT("Initializing Systems."));
 
   PlayerCharacter = Cast<APlayerCharacter>(GetWorld()->GetFirstPlayerController()->GetPawn());
+  ControlHUD = Cast<AInGameControlHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
+  check(PlayerCharacter && ControlHUD);
+  check(DialogueSystemClass && TestEnemyManagerClass);
 
-  ADialogueSystem* DialogueSystem = GetWorld()->SpawnActor<ADialogueSystem>(DialogueSystemClass);
+  DialogueSystem = GetWorld()->SpawnActor<ADialogueSystem>(DialogueSystemClass);
+
+  TestEnemyManager = GetWorld()->SpawnActor<ATestEnemyManager>(TestEnemyManagerClass);
+
   PlayerCharacter->DialogueSystem = DialogueSystem;
 
-  ControlHUD = Cast<AInGameControlHUD>(GetWorld()->GetFirstPlayerController()->GetHUD());
   ControlHUD->DialogueSystem = DialogueSystem;
-  ControlHUD->InitUIWidgets();
-
   UControlHUDSubsystem* ControlHUDSubsystem = GetSubsystem<UControlHUDSubsystem>(GetWorld());
   ControlHUDSubsystem->RegisterHUD(ControlHUD);
 
+  TestEnemyManager->PlayerCharacter = PlayerCharacter;
+  TestEnemyManager->DialogueSystem = DialogueSystem;
+
+  ControlHUD->InitUIWidgets();
+
+  // Settings
   UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
       GetWorld()->GetFirstPlayerController()->GetLocalPlayer());
   check(Subsystem);

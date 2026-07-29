@@ -1,4 +1,5 @@
 #include "VordieScriptSubsystem.h"
+#include "HAL/Platform.h"
 #include "Logging/LogVerbosity.h"
 #include "Misc/TVariant.h"
 
@@ -134,6 +135,7 @@ auto Tokenize(const FString& Code) -> TArray<Token> {
       } else {
         UE_LOG(LogTemp, Error, TEXT("Unknown character: %c"), C);
         checkNoEntry();
+        return {};
       }
     } else if (C == '&') {
       if (i + 1 < Code.Len() && Code[i + 1] == '&') {
@@ -142,6 +144,7 @@ auto Tokenize(const FString& Code) -> TArray<Token> {
       } else {
         UE_LOG(LogTemp, Error, TEXT("Unknown character: %c"), C);
         checkNoEntry();
+        return {};
       }
     } else if (C == '=') {
       if (i + 1 < Code.Len() && Code[i + 1] == '=') {
@@ -150,6 +153,7 @@ auto Tokenize(const FString& Code) -> TArray<Token> {
       } else {
         UE_LOG(LogTemp, Error, TEXT("Unknown character: %c"), C);
         checkNoEntry();
+        return {};
       }
     } else if (C == '!') {
       if (i + 1 < Code.Len() && Code[i + 1] == '=') {
@@ -281,10 +285,10 @@ inline auto ExpressionToString(const Expression& Expr) -> FString {
                           }
                         },
                         [](const Operation& Op) -> FString {
-                          FString Result = "(" + Op.Value;
-                          for (const auto& Operand : Op.Operands) Result += " " + ExpressionToString(Operand);
-                          Result += ")";
-                          return Result;
+                          FString Res = "(" + Op.Value;
+                          for (const auto& Operand : Op.Operands) Res += " " + ExpressionToString(Operand);
+                          Res += ")";
+                          return Res;
                         }},
                Expr);
 };
@@ -430,6 +434,254 @@ inline auto ParseTokensToScript(const TArray<Token>& Tokens) -> Script {
   }
   return Script{Expressions};
 };
+
+inline auto CompareVariants(const TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*>& A,
+                            const TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*>& B) -> bool {
+  if (A.GetIndex() != B.GetIndex()) return false;
+
+  Visit(Overload{[&](const auto& ValA) {
+          using T = std::decay_t<decltype(ValA)>;
+          return ValA == B.Get<T>();
+        }},
+        A);
+}
+
+template <typename T>
+inline auto ApplyUnaryOperation(OperatorTokenType Op, const T& Val) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::Not: Res.Set<T>(!Val); break;
+    case OperatorTokenType::Plus: Res.Set<T>(Val); break;
+    case OperatorTokenType::Minus: Res.Set<T>(-Val); break;
+    default: {
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
+      checkNoEntry();
+      return {};
+    }
+  }
+  return Res;
+}
+template <>
+inline auto ApplyUnaryOperation<FString>(OperatorTokenType Op, const FString& Val) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::Not: Res.Set<bool>(Val.IsEmpty()); break;
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+template <>
+inline auto ApplyUnaryOperation<bool>(OperatorTokenType Op, const bool& Val) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::Not: Res.Set<bool>(!Val); break;
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+template <>
+inline auto ApplyUnaryOperation<VSEvaluatedArray>(OperatorTokenType Op, const VSEvaluatedArray& Val)
+    -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::Not: Res.Set<bool>(Val.Num() == 0); break;
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+
+template <typename T>
+inline auto ApplyBinaryOperation(OperatorTokenType Op, const T& LeftVal, const T& RightVal) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::And: Res.Set<T>(LeftVal && RightVal); break;
+    case OperatorTokenType::Or: Res.Set<T>(LeftVal || RightVal); break;
+    case OperatorTokenType::Equal: Res.Set<T>(LeftVal == RightVal); break;
+    case OperatorTokenType::NotEqual: Res.Set<T>(LeftVal != RightVal); break;
+    case OperatorTokenType::Less: Res.Set<T>(LeftVal < RightVal); break;
+    case OperatorTokenType::LessEqual: Res.Set<T>(LeftVal <= RightVal); break;
+    case OperatorTokenType::Greater: Res.Set<T>(LeftVal > RightVal); break;
+    case OperatorTokenType::GreaterEqual: Res.Set<T>(LeftVal >= RightVal); break;
+    case OperatorTokenType::Plus: Res.Set<T>(LeftVal + RightVal); break;
+    case OperatorTokenType::Minus: Res.Set<T>(LeftVal - RightVal); break;
+    case OperatorTokenType::Times: Res.Set<T>(LeftVal * RightVal); break;
+    case OperatorTokenType::Divide: {
+      if (RightVal == 0) {
+        UE_LOG(LogTemp, Error, TEXT("Division by zero"));
+        checkNoEntry();
+        return {};
+      }
+      Res.Set<T>(LeftVal / RightVal);
+      break;
+    }
+    case OperatorTokenType::Dot: {
+      if constexpr (TypeTests::TAreTypesEqual_V<T, int32>) {
+        auto _Res = FString::FromInt(LeftVal) + FString::FromInt(RightVal);
+        Res.Set<FString>(_Res);
+        break;
+      } else {
+        UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
+        checkNoEntry();
+        return {};
+      }
+    }
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+template <>
+inline auto ApplyBinaryOperation<FString>(OperatorTokenType Op, const FString& LeftVal, const FString& RightVal)
+    -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::Equal: Res.Set<bool>(LeftVal == RightVal); break;
+    case OperatorTokenType::NotEqual: Res.Set<bool>(LeftVal != RightVal); break;
+    case OperatorTokenType::Less: Res.Set<bool>(LeftVal < RightVal); break;
+    case OperatorTokenType::LessEqual: Res.Set<bool>(LeftVal <= RightVal); break;
+    case OperatorTokenType::Greater: Res.Set<bool>(LeftVal > RightVal); break;
+    case OperatorTokenType::GreaterEqual: Res.Set<bool>(LeftVal >= RightVal); break;
+    case OperatorTokenType::Plus: Res.Set<FString>(LeftVal + RightVal); break;
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+template <>
+inline auto ApplyBinaryOperation<bool>(OperatorTokenType Op, const bool& LeftVal, const bool& RightVal)
+    -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::And: Res.Set<bool>(LeftVal && RightVal); break;
+    case OperatorTokenType::Or: Res.Set<bool>(LeftVal || RightVal); break;
+    case OperatorTokenType::Equal: Res.Set<bool>(LeftVal == RightVal); break;
+    case OperatorTokenType::NotEqual: Res.Set<bool>(LeftVal != RightVal); break;
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+template <>
+inline auto ApplyBinaryOperation<VSEvaluatedArray>(OperatorTokenType Op,
+                                                   const VSEvaluatedArray& LeftVal,
+                                                   const VSEvaluatedArray& RightVal) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+
+  switch (Op) {
+    case OperatorTokenType::Equal: {
+      if (LeftVal.Num() != RightVal.Num()) {
+        Res.Set<bool>(false);
+        break;
+      }
+
+      for (int32 i = 0; i < LeftVal.Num(); ++i) {
+        auto L = LeftVal[i];
+        auto R = RightVal[i];
+        Res.Set<bool>(CompareVariants(L, R));
+      }
+      break;
+    }
+    case OperatorTokenType::NotEqual: {
+      if (LeftVal.Num() != RightVal.Num()) {
+        Res.Set<bool>(true);
+        break;
+      }
+
+      for (int32 i = 0; i < LeftVal.Num(); ++i) {
+        auto L = LeftVal[i];
+        auto R = RightVal[i];
+        Res.Set<bool>(!CompareVariants(L, R));
+      }
+      break;
+    }
+    case OperatorTokenType::Plus: {
+      VSEvaluatedArray Result = LeftVal;
+      Result.Append(RightVal);
+      Res.Set<VSEvaluatedArray>(Result);
+      break;
+    }
+    case OperatorTokenType::Minus: {
+      VSEvaluatedArray Result;
+      for (const auto& LeftElem : LeftVal)
+        if (!RightVal.ContainsByPredicate([&](const auto& RightElem) { return CompareVariants(LeftElem, RightElem); }))
+          Result.Add(LeftElem);
+      Res.Set<VSEvaluatedArray>(Result);
+      break;
+    }
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+template <>
+inline auto ApplyBinaryOperation<VSEvaluatedMap>(OperatorTokenType Op,
+                                                 const VSEvaluatedMap& LeftVal,
+                                                 const VSEvaluatedMap& RightVal) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::Equal: {
+      for (const auto& [Key, LeftValue] : LeftVal) {
+        if (!RightVal.Contains(Key)) {
+          Res.Set<bool>(false);
+          break;
+        }
+        const auto& RightValue = RightVal[Key];
+        if (!CompareVariants(LeftValue, RightValue)) {
+          Res.Set<bool>(false);
+          break;
+        }
+      }
+    }
+    case OperatorTokenType::NotEqual: {
+      for (const auto& [Key, LeftValue] : LeftVal) {
+        if (!RightVal.Contains(Key)) {
+          Res.Set<bool>(true);
+          break;
+        }
+        const auto& RightValue = RightVal[Key];
+        if (!CompareVariants(LeftValue, RightValue)) {
+          Res.Set<bool>(true);
+          break;
+        }
+      }
+    }
+    case OperatorTokenType::Plus: {
+      VSEvaluatedMap Result = LeftVal;
+      for (const auto& [Key, Value] : RightVal) Result.Add(Key, Value);
+      Res.Set<VSEvaluatedMap>(Result);
+      break;
+    }
+    case OperatorTokenType::Minus: {
+      VSEvaluatedMap Result = LeftVal;
+      for (const auto& [Key, _] : RightVal) Result.Remove(Key);
+      Res.Set<VSEvaluatedMap>(Result);
+      break;
+    }
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+
 auto TestScriptTreeGen(const FString& ScriptCode) -> FString {
   TArray<Token> Tokens = Tokenize(ScriptCode);
   Script ParsedScript = ParseTokensToScript(Tokens);

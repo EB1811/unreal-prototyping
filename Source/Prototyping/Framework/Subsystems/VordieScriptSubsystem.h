@@ -30,6 +30,8 @@ struct VSEvaluatedScript {
   VSEvaluatedValue ReturnValue;
 };
 
+auto TestScriptTreeGen(const FString& ScriptCode) -> FString;
+
 UCLASS()
 class PROTOTYPING_API UVordieScriptSubsystem : public UWorldSubsystem {
   GENERATED_BODY()

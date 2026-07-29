@@ -1,4 +1,5 @@
 #include "VordieScriptSubsystem.h"
+#include "Logging/LogVerbosity.h"
 #include "Misc/TVariant.h"
 
 enum class OperatorTokenType {
@@ -93,7 +94,7 @@ inline auto ShouldEndStatement(const FString& Code, int32 Index, TArray<Token>& 
   return true;
 }
 auto Tokenize(const FString& Code) -> TArray<Token> {
-  int BracketDepth = 0;
+  int32 BracketDepth = 0;
   TArray<Token> Tokens;
   int32 i = 0;
   while (i < Code.Len()) {
@@ -269,7 +270,6 @@ inline auto ToExpr(OperatorTokenType OperatorTokenType, const FString& Value, TA
   Expr.Set<Operation>(Operation{OperatorTokenType, Value, Operands});
   return Expr;
 }
-
 inline auto ExpressionToString(const Expression& Expr) -> FString {
   return Visit(Overload{[](const Operand& Op) -> FString {
                           switch (Op.Type) {
@@ -319,7 +319,7 @@ auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> 
                 return ToExpr(Op, CurrentToken.Value,
                               {ParseExpression(Tokens, Index, UNARY_OPERATOR_TOKEN_BINDINGS[Op])});
               default:
-                UE_LOG(LogTemp, Error, TEXT("Unexpected operator: %d at index %d"), static_cast<int>(Op), Index - 1);
+                UE_LOG(LogTemp, Error, TEXT("Unexpected operator: %d at index %d"), static_cast<int32>(Op), Index - 1);
                 checkNoEntry();
                 return ToExpr(Op, CurrentToken.Value, {});
             }
@@ -342,13 +342,12 @@ auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> 
               }
               case (OperandTokenType::PipeVar): return ToExpr(Op, StrValue);
               default:
-                UE_LOG(LogTemp, Error, TEXT("Unexpected operand: %d at index %d"), static_cast<int>(Op), Index - 1);
+                UE_LOG(LogTemp, Error, TEXT("Unexpected operand: %d at index %d"), static_cast<int32>(Op), Index - 1);
                 checkNoEntry();
                 return ToExpr(Op, StrValue);
             }
           }},
       CurrentToken.Type);
-  UE_LOG(LogTemp, Log, TEXT("Parsed left expression: %s, at index: %d"), *ExpressionToString(Left), Index - 1);
 
   while (Index < Tokens.Num()) {
     Token NextToken = Tokens[Index];
@@ -383,7 +382,7 @@ auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> 
       continue;
     }
 
-    if (NextToken.Type.IsType<OperatorTokenType>()) break;
+    if (!NextToken.Type.IsType<OperatorTokenType>()) break;
 
     OperatorTokenType NextOp = NextToken.Type.Get<OperatorTokenType>();
     // Comma handling, means it's a function argument separator.
@@ -397,8 +396,6 @@ auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> 
       Index++;
       break;
     }
-    int NextBP = OPERATOR_TOKEN_BINDINGS[NextOp];
-    if (NextBP < MinBP) break;
     // Ternary operator
     if (NextOp == OperatorTokenType::Question) {
       Index++;  // Consume the '?'
@@ -409,6 +406,9 @@ auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> 
       continue;
     }
     if (NextOp == OperatorTokenType::Colon) break;
+
+    int32 NextBP = OPERATOR_TOKEN_BINDINGS.FindRef(NextOp, -1);
+    if (NextBP < MinBP) break;
 
     Index++;
     Expression Right = ParseExpression(Tokens, Index, NextBP + 1);
@@ -430,6 +430,16 @@ inline auto ParseTokensToScript(const TArray<Token>& Tokens) -> Script {
   }
   return Script{Expressions};
 };
+auto TestScriptTreeGen(const FString& ScriptCode) -> FString {
+  TArray<Token> Tokens = Tokenize(ScriptCode);
+  Script ParsedScript = ParseTokensToScript(Tokens);
+
+  for (const auto& Expr : ParsedScript.Expressions) {
+    FString ExprStr = ExpressionToString(Expr);
+    UE_LOG(LogTemp, Log, TEXT("Parsed Expression: %s"), *ExprStr);
+  }
+  return ExpressionToString(ParsedScript.Expressions.Last());
+}
 
 UVordieScriptSubsystem::UVordieScriptSubsystem() {}
 

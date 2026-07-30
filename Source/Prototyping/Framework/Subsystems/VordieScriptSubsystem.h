@@ -13,8 +13,9 @@
 // Check the pointer before using it, as it may have been garbage collected, and if it has, remove it from the GlobalEnviroment.
 using UObjectPtr = TWeakObjectPtr<UObject>;
 
-using VSEvaluatedArray = TArray<TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*>>;
-using VSEvaluatedMap = TMap<FString, TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*>>;
+using VSContainerable = TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*>;
+using VSEvaluatedArray = TArray<VSContainerable>;
+using VSEvaluatedMap = TMap<FString, VSContainerable>;
 using VSEvaluatedValue =
     TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*, VSEvaluatedArray, VSEvaluatedMap>;
 

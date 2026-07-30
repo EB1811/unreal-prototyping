@@ -435,17 +435,41 @@ inline auto ParseTokensToScript(const TArray<Token>& Tokens) -> Script {
   return Script{Expressions};
 };
 
-inline auto CompareVariants(const TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*>& A,
-                            const TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*>& B) -> bool {
+// Helper functions.
+inline auto CompareVariants(const VSContainerable& A, const VSContainerable& B) -> bool {
   if (A.GetIndex() != B.GetIndex()) return false;
 
   Visit(Overload{[&](const auto& ValA) {
-          using T = std::decay_t<decltype(ValA)>;
+          using T = typename TDecay<decltype(ValA)>::Type;
           return ValA == B.Get<T>();
         }},
         A);
 }
+template <typename T>
+concept VSEvaluatedValueTypes =
+    TypeTests::TAreTypesEqual_V<T, FString> || TypeTests::TAreTypesEqual_V<T, int32> ||
+    TypeTests::TAreTypesEqual_V<T, float> || TypeTests::TAreTypesEqual_V<T, bool> ||
+    TypeTests::TAreTypesEqual_V<T, UObjectPtr> || TypeTests::TAreTypesEqual_V<T, FStructProperty*> ||
+    TypeTests::TAreTypesEqual_V<T, VSEvaluatedArray> || TypeTests::TAreTypesEqual_V<T, VSEvaluatedMap>;
+template <VSEvaluatedValueTypes T>
+inline auto ToVSEvaluatedValue(T Val) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  Res.Set<T>(Val);
+  return Res;
+}
 
+template <typename T>
+inline auto UnaryOperations(TMap<OperatorTokenType, TFunction<VSEvaluatedValue(const T&)>> UnaryOps,
+                            OperatorTokenType Op,
+                            const T& Val) -> VSEvaluatedValue {
+  if (UnaryOps.Contains(Op)) {
+    return UnaryOps[Op](Val);
+  } else {
+    UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
+    checkNoEntry();
+    return {};
+  }
+}
 template <typename T>
 inline auto ApplyUnaryOperation(OperatorTokenType Op, const T& Val) -> VSEvaluatedValue {
   VSEvaluatedValue Res;
@@ -486,8 +510,32 @@ inline auto ApplyUnaryOperation<bool>(OperatorTokenType Op, const bool& Val) -> 
   return Res;
 }
 template <>
+inline auto ApplyUnaryOperation<UObjectPtr>(OperatorTokenType Op, const UObjectPtr& Val) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::Not: Res.Set<bool>(!Val.IsValid()); break;
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+template <>
 inline auto ApplyUnaryOperation<VSEvaluatedArray>(OperatorTokenType Op, const VSEvaluatedArray& Val)
     -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case OperatorTokenType::Not: Res.Set<bool>(Val.Num() == 0); break;
+    default:
+      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
+      checkNoEntry();
+      return {};
+  }
+  return Res;
+}
+template <>
+inline auto ApplyUnaryOperation<VSEvaluatedMap>(OperatorTokenType Op, const VSEvaluatedMap& Val) -> VSEvaluatedValue {
   VSEvaluatedValue Res;
   switch (Op) {
     case OperatorTokenType::Not: Res.Set<bool>(Val.Num() == 0); break;
@@ -589,11 +637,7 @@ inline auto ApplyBinaryOperation<VSEvaluatedArray>(OperatorTokenType Op,
         break;
       }
 
-      for (int32 i = 0; i < LeftVal.Num(); ++i) {
-        auto L = LeftVal[i];
-        auto R = RightVal[i];
-        Res.Set<bool>(CompareVariants(L, R));
-      }
+      for (int32 i = 0; i < LeftVal.Num(); ++i) Res.Set<bool>(CompareVariants(LeftVal[i], RightVal[i]));
       break;
     }
     case OperatorTokenType::NotEqual: {
@@ -602,11 +646,7 @@ inline auto ApplyBinaryOperation<VSEvaluatedArray>(OperatorTokenType Op,
         break;
       }
 
-      for (int32 i = 0; i < LeftVal.Num(); ++i) {
-        auto L = LeftVal[i];
-        auto R = RightVal[i];
-        Res.Set<bool>(!CompareVariants(L, R));
-      }
+      for (int32 i = 0; i < LeftVal.Num(); ++i) Res.Set<bool>(!CompareVariants(LeftVal[i], RightVal[i]));
       break;
     }
     case OperatorTokenType::Plus: {

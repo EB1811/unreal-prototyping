@@ -64,7 +64,7 @@ struct VSOperation {
   FString Value;
   TArray<VSExpression> Operands;
 };
-struct Script {
+struct VSScript {
   TArray<VSExpression> Expressions;
 };
 
@@ -105,5 +105,11 @@ public:
 
 private:
   auto EvaluateOperand(const VSOperand& Op) -> VSEvaluatedValue;
+
+  auto EvaluateArrayLiteral(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvaluateArrayAccess(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvaluateMapLiteral(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvaluateMapAccess(const VSOperation& Op) -> VSEvaluatedValue;
+
   auto EvaluateExpression(const VSExpression& Expr) -> VSEvaluatedValue;
 };

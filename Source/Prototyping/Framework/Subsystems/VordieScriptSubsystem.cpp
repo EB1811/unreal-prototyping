@@ -1,7 +1,15 @@
 #include "VordieScriptSubsystem.h"
+#include "Containers/UnrealString.h"
 #include "HAL/Platform.h"
 #include "Logging/LogVerbosity.h"
 #include "Misc/TVariant.h"
+
+template <typename T>
+inline auto LogAndCheck(const FString& Message) -> T {
+  UE_LOG(LogTemp, Error, TEXT("%s"), *Message);
+  checkNoEntry();
+  return {};
+}
 
 inline auto ToToken(VSOperatorTokenType Type, const FString& Value) -> Token {
   TVariant<VSOperatorTokenType, VSOperandTokenType> T;
@@ -89,27 +97,21 @@ auto Tokenize(const FString& Code) -> TArray<Token> {
         Tokens.Push(ToToken(VSOperatorTokenType::Or, "||"));
         i += 2;
       } else {
-        UE_LOG(LogTemp, Error, TEXT("Unknown character: %c"), C);
-        checkNoEntry();
-        return {};
+        return LogAndCheck<TArray<Token>>(FString::Printf(TEXT("Unknown character: %c"), C));
       }
     } else if (C == '&') {
       if (i + 1 < Code.Len() && Code[i + 1] == '&') {
         Tokens.Push(ToToken(VSOperatorTokenType::And, "&&"));
         i += 2;
       } else {
-        UE_LOG(LogTemp, Error, TEXT("Unknown character: %c"), C);
-        checkNoEntry();
-        return {};
+        return LogAndCheck<TArray<Token>>(FString::Printf(TEXT("Unknown character: %c"), C));
       }
     } else if (C == '=') {
       if (i + 1 < Code.Len() && Code[i + 1] == '=') {
         Tokens.Push(ToToken(VSOperatorTokenType::Equal, "=="));
         i += 2;
       } else {
-        UE_LOG(LogTemp, Error, TEXT("Unknown character: %c"), C);
-        checkNoEntry();
-        return {};
+        return LogAndCheck<TArray<Token>>(FString::Printf(TEXT("Unknown character: %c"), C));
       }
     } else if (C == '!') {
       if (i + 1 < Code.Len() && Code[i + 1] == '=') {
@@ -140,8 +142,7 @@ auto Tokenize(const FString& Code) -> TArray<Token> {
         Tokens.Push(ToToken(VSOperatorTokenType::Pipe, "~>"));
         i += 2;
       } else {
-        UE_LOG(LogTemp, Error, TEXT("Unknown character: %c"), C);
-        checkNoEntry();
+        return LogAndCheck<TArray<Token>>(FString::Printf(TEXT("Unknown character: %c"), C));
       }
     } else {
       switch (C) {
@@ -160,10 +161,7 @@ auto Tokenize(const FString& Code) -> TArray<Token> {
         case '/': Tokens.Push(ToToken(VSOperatorTokenType::Divide, "/")); break;
         case '+': Tokens.Push(ToToken(VSOperatorTokenType::Plus, "+")); break;
         case '-': Tokens.Push(ToToken(VSOperatorTokenType::Minus, "-")); break;
-        default:
-          UE_LOG(LogTemp, Error, TEXT("Unknown character: %c"), C);
-          checkNoEntry();
-          break;
+        default: LogAndCheck<TArray<Token>>(FString::Printf(TEXT("Unknown character: %c"), C)); break;
       }
       i++;
     }
@@ -236,64 +234,62 @@ inline auto ExpressionToString(const VSExpression& Expr) -> FString {
 
 auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> VSExpression {
   Token CurrentToken = Tokens[Index++];
-  VSExpression Left = Visit(
-      Overload{
-          [&](VSOperatorTokenType Op) -> VSExpression {
-            switch (Op) {
-              case (VSOperatorTokenType::LeftParen):
-              case (VSOperatorTokenType::LeftBrace): return ParseExpression(Tokens, Index, 0);
-              // Array literal
-              case (VSOperatorTokenType::LeftSquare): {
-                TArray<VSExpression> Elements;
-                while (Index < Tokens.Num()) {
-                  Elements.Push(ParseExpression(Tokens, Index, 0));
+  VSExpression Left =
+      Visit(Overload{[&](VSOperatorTokenType Op) -> VSExpression {
+                       switch (Op) {
+                         case (VSOperatorTokenType::LeftParen):
+                         case (VSOperatorTokenType::LeftBrace): return ParseExpression(Tokens, Index, 0);
+                         // Array literal
+                         case (VSOperatorTokenType::LeftSquare): {
+                           TArray<VSExpression> Elements;
+                           while (Index < Tokens.Num()) {
+                             Elements.Push(ParseExpression(Tokens, Index, 0));
 
-                  // Explicitly check for closing square bracket to end array literal (closing bracket already consumed)
-                  if (TokenIs(Tokens[Index - 1], VSOperatorTokenType::RightSquare)) break;
-                  if (TokenIs(Tokens[Index], VSOperandTokenType::Eof) ||
-                      TokenIs(Tokens[Index], VSOperandTokenType::Eol))
-                    break;
+                             // Explicitly check for closing square bracket to end array literal (closing bracket already consumed)
+                             if (TokenIs(Tokens[Index - 1], VSOperatorTokenType::RightSquare)) break;
+                             if (TokenIs(Tokens[Index], VSOperandTokenType::Eof) ||
+                                 TokenIs(Tokens[Index], VSOperandTokenType::Eol))
+                               break;
 
-                  Index++;
-                }
-                return ToExpr(Op, "array_literal", Elements);
-              }
-              // Unary
-              case (VSOperatorTokenType::Not):
-              case (VSOperatorTokenType::Plus):
-              case (VSOperatorTokenType::Minus):
-                return ToExpr(Op, CurrentToken.Value,
-                              {ParseExpression(Tokens, Index, UNARY_OPERATOR_TOKEN_BINDINGS[Op])});
-              default:
-                UE_LOG(LogTemp, Error, TEXT("Unexpected operator: %d at index %d"), static_cast<int32>(Op), Index - 1);
-                checkNoEntry();
-                return ToExpr(Op, CurrentToken.Value, {});
-            }
-          },
-          [&](VSOperandTokenType Op) -> VSExpression {
-            VSOperandValue StrValue;
-            StrValue.Set<FString>(CurrentToken.Value);
-            switch (Op) {
-              case (VSOperandTokenType::Identifier): return ToExpr(Op, StrValue);
-              case (VSOperandTokenType::Number): {
-                VSOperandValue NumValue;
-                NumValue.Set<int32>(FCString::Atoi(*CurrentToken.Value));
-                return ToExpr(Op, NumValue);
-              }
-              case (VSOperandTokenType::String): return ToExpr(Op, StrValue);
-              case (VSOperandTokenType::Boolean): {
-                VSOperandValue BoolValue;
-                BoolValue.Set<bool>(CurrentToken.Value == "true");
-                return ToExpr(Op, BoolValue);
-              }
-              case (VSOperandTokenType::PipeVar): return ToExpr(Op, StrValue);
-              default:
-                UE_LOG(LogTemp, Error, TEXT("Unexpected operand: %d at index %d"), static_cast<int32>(Op), Index - 1);
-                checkNoEntry();
-                return ToExpr(Op, StrValue);
-            }
-          }},
-      CurrentToken.Type);
+                             Index++;
+                           }
+                           return ToExpr(Op, "array_literal", Elements);
+                         }
+                         // Unary
+                         case (VSOperatorTokenType::Not):
+                         case (VSOperatorTokenType::Plus):
+                         case (VSOperatorTokenType::Minus):
+                           return ToExpr(Op, CurrentToken.Value,
+                                         {ParseExpression(Tokens, Index, UNARY_OPERATOR_TOKEN_BINDINGS[Op])});
+                         default: {
+                           return LogAndCheck<VSExpression>(FString::Printf(TEXT("Unexpected operator: %d at index %d"),
+                                                                            static_cast<int32>(Op), Index - 1));
+                         }
+                       }
+                     },
+                     [&](VSOperandTokenType Op) -> VSExpression {
+                       VSOperandValue StrValue;
+                       StrValue.Set<FString>(CurrentToken.Value);
+                       switch (Op) {
+                         case (VSOperandTokenType::Identifier): return ToExpr(Op, StrValue);
+                         case (VSOperandTokenType::Number): {
+                           VSOperandValue NumValue;
+                           NumValue.Set<int32>(FCString::Atoi(*CurrentToken.Value));
+                           return ToExpr(Op, NumValue);
+                         }
+                         case (VSOperandTokenType::String): return ToExpr(Op, StrValue);
+                         case (VSOperandTokenType::Boolean): {
+                           VSOperandValue BoolValue;
+                           BoolValue.Set<bool>(CurrentToken.Value == "true");
+                           return ToExpr(Op, BoolValue);
+                         }
+                         case (VSOperandTokenType::PipeVar): return ToExpr(Op, StrValue);
+                         default:
+                           return LogAndCheck<VSExpression>(FString::Printf(TEXT("Unexpected operand: %d at index %d"),
+                                                                            static_cast<int32>(Op), Index - 1));
+                       }
+                     }},
+            CurrentToken.Type);
 
   while (Index < Tokens.Num()) {
     Token NextToken = Tokens[Index];
@@ -362,9 +358,8 @@ auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> 
       else if (TokenIs(MemberToken, VSOperandTokenType::Number))
         MemberValue.Set<int32>(FCString::Atoi(*MemberToken.Value));
       else {
-        UE_LOG(LogTemp, Error, TEXT("Unexpected member token: %d at index %d"),
-               static_cast<int32>(MemberToken.Type.Get<VSOperandTokenType>()), Index - 1);
-        checkNoEntry();
+        return LogAndCheck<VSExpression>(FString::Printf(TEXT("Unexpected member access token: %d at index %d"),
+                                                         static_cast<int32>(MemberToken.Type.GetIndex()), Index - 1));
         MemberValue.Set<FString>(MemberToken.Value);
       }
 
@@ -384,7 +379,7 @@ auto ParseExpression(const TArray<Token>& Tokens, int32& Index, int32 MinBP) -> 
 
   return Left;
 };
-inline auto ParseTokensToScript(const TArray<Token>& Tokens) -> Script {
+inline auto ParseTokensToScript(const TArray<Token>& Tokens) -> VSScript {
   TArray<VSExpression> Expressions;
   int32 Index = 0;
   while (Index < Tokens.Num() && !TokenIs(Tokens[Index], VSOperandTokenType::Eof)) {
@@ -394,7 +389,7 @@ inline auto ParseTokensToScript(const TArray<Token>& Tokens) -> Script {
     }
     Expressions.Push(ParseExpression(Tokens, Index, 0));
   }
-  return Script{Expressions};
+  return VSScript{Expressions};
 };
 
 // Helper functions.
@@ -424,13 +419,8 @@ template <typename T>
 inline auto UnaryOperations(TMap<VSOperatorTokenType, TFunction<VSEvaluatedValue(const T&)>> UnaryOps,
                             VSOperatorTokenType Op,
                             const T& Val) -> VSEvaluatedValue {
-  if (UnaryOps.Contains(Op)) {
-    return UnaryOps[Op](Val);
-  } else {
-    UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
-    checkNoEntry();
-    return {};
-  }
+  if (UnaryOps.Contains(Op)) return UnaryOps[Op](Val);
+  else return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
 }
 template <typename T>
 inline auto ApplyUnaryOperation(VSOperatorTokenType Op, const T& Val) -> VSEvaluatedValue {
@@ -439,11 +429,7 @@ inline auto ApplyUnaryOperation(VSOperatorTokenType Op, const T& Val) -> VSEvalu
     case VSOperatorTokenType::Not: Res.Set<T>(!Val); break;
     case VSOperatorTokenType::Plus: Res.Set<T>(Val); break;
     case VSOperatorTokenType::Minus: Res.Set<T>(-Val); break;
-    default: {
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
-      checkNoEntry();
-      return {};
-    }
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
   }
   return Res;
 }
@@ -452,10 +438,7 @@ inline auto ApplyUnaryOperation<FString>(VSOperatorTokenType Op, const FString& 
   VSEvaluatedValue Res;
   switch (Op) {
     case VSOperatorTokenType::Not: Res.Set<bool>(Val.IsEmpty()); break;
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
   }
   return Res;
 }
@@ -464,10 +447,7 @@ inline auto ApplyUnaryOperation<bool>(VSOperatorTokenType Op, const bool& Val) -
   VSEvaluatedValue Res;
   switch (Op) {
     case VSOperatorTokenType::Not: Res.Set<bool>(!Val); break;
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
   }
   return Res;
 }
@@ -476,10 +456,7 @@ inline auto ApplyUnaryOperation<UObjectPtr>(VSOperatorTokenType Op, const UObjec
   VSEvaluatedValue Res;
   switch (Op) {
     case VSOperatorTokenType::Not: Res.Set<bool>(!Val.IsValid()); break;
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
   }
   return Res;
 }
@@ -489,10 +466,7 @@ inline auto ApplyUnaryOperation<VSEvaluatedArray>(VSOperatorTokenType Op, const 
   VSEvaluatedValue Res;
   switch (Op) {
     case VSOperatorTokenType::Not: Res.Set<bool>(Val.Num() == 0); break;
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
   }
   return Res;
 }
@@ -501,10 +475,7 @@ inline auto ApplyUnaryOperation<VSEvaluatedMap>(VSOperatorTokenType Op, const VS
   VSEvaluatedValue Res;
   switch (Op) {
     case VSOperatorTokenType::Not: Res.Set<bool>(Val.Num() == 0); break;
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for unary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
   }
   return Res;
 }
@@ -525,11 +496,7 @@ inline auto ApplyBinaryOperation(VSOperatorTokenType Op, const T& LeftVal, const
     case VSOperatorTokenType::Minus: Res.Set<T>(LeftVal - RightVal); break;
     case VSOperatorTokenType::Times: Res.Set<T>(LeftVal * RightVal); break;
     case VSOperatorTokenType::Divide: {
-      if (RightVal == 0) {
-        UE_LOG(LogTemp, Error, TEXT("Division by zero"));
-        checkNoEntry();
-        return {};
-      }
+      if (RightVal == 0) return LogAndCheck<VSEvaluatedValue>(TEXT("Division by zero error"));
       Res.Set<T>(LeftVal / RightVal);
       break;
     }
@@ -539,15 +506,10 @@ inline auto ApplyBinaryOperation(VSOperatorTokenType Op, const T& LeftVal, const
         Res.Set<FString>(_Res);
         break;
       } else {
-        UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
-        checkNoEntry();
-        return {};
+        return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
       }
     }
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
   }
   return Res;
 }
@@ -563,10 +525,7 @@ inline auto ApplyBinaryOperation<FString>(VSOperatorTokenType Op, const FString&
     case VSOperatorTokenType::Greater: Res.Set<bool>(LeftVal > RightVal); break;
     case VSOperatorTokenType::GreaterEqual: Res.Set<bool>(LeftVal >= RightVal); break;
     case VSOperatorTokenType::Plus: Res.Set<FString>(LeftVal + RightVal); break;
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
   }
   return Res;
 }
@@ -579,10 +538,7 @@ inline auto ApplyBinaryOperation<bool>(VSOperatorTokenType Op, const bool& LeftV
     case VSOperatorTokenType::Or: Res.Set<bool>(LeftVal || RightVal); break;
     case VSOperatorTokenType::Equal: Res.Set<bool>(LeftVal == RightVal); break;
     case VSOperatorTokenType::NotEqual: Res.Set<bool>(LeftVal != RightVal); break;
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
   }
   return Res;
 }
@@ -596,10 +552,7 @@ inline auto ApplyBinaryOperation<UObjectPtr>(VSOperatorTokenType Op,
     case VSOperatorTokenType::Or: Res.Set<bool>(LeftVal.IsValid() || RightVal.IsValid()); break;
     case VSOperatorTokenType::Equal: Res.Set<bool>(LeftVal == RightVal); break;
     case VSOperatorTokenType::NotEqual: Res.Set<bool>(LeftVal != RightVal); break;
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
   }
   return Res;
 }
@@ -642,10 +595,7 @@ inline auto ApplyBinaryOperation<VSEvaluatedArray>(VSOperatorTokenType Op,
       Res.Set<VSEvaluatedArray>(Result);
       break;
     }
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
   }
   return Res;
 }
@@ -693,10 +643,7 @@ inline auto ApplyBinaryOperation<VSEvaluatedMap>(VSOperatorTokenType Op,
       Res.Set<VSEvaluatedMap>(Result);
       break;
     }
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operator for binary operation"));
-      checkNoEntry();
-      return {};
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
   }
   return Res;
 }
@@ -705,26 +652,120 @@ inline auto ApplyBinaryOperation<VSEvaluatedMap>(VSOperatorTokenType Op,
 auto UVordieScriptSubsystem::EvaluateOperand(const VSOperand& Op) -> VSEvaluatedValue {
   switch (Op.Type) {
     case VSOperandTokenType::Identifier: {
-      FString IdentifierName = Op.Value.Get<FString>();
-      if (!GlobalEnviroment.Contains(FName(*IdentifierName))) {
-        UE_LOG(LogTemp, Error, TEXT("Undefined identifier: %s"), *IdentifierName);
-        checkNoEntry();
-        return {};
-      }
+      const FString IdentifierName = Op.Value.Get<FString>();
+      if (!GlobalEnviroment.Contains(FName(*IdentifierName)))
+        return LogAndCheck<VSEvaluatedValue>(FString::Printf(TEXT("Undefined identifier: %s"), *IdentifierName));
+
+      const auto& SymbolValue = GlobalEnviroment[FName(*IdentifierName)];
+      return Visit(Overload{[&](const VSFunction& Func) -> VSEvaluatedValue {
+                              // Temp
+                              return ToVSEvaluatedValue(1);
+                            },
+                            [&](const auto& Val) -> VSEvaluatedValue { return ToVSEvaluatedValue(Val); }},
+                   SymbolValue);
     }
     case VSOperandTokenType::Number: return ToVSEvaluatedValue<int32>(Op.Value.Get<int32>());
     case VSOperandTokenType::String: return ToVSEvaluatedValue<FString>(Op.Value.Get<FString>());
     case VSOperandTokenType::Boolean: return ToVSEvaluatedValue<bool>(Op.Value.Get<bool>());
-    default:
-      UE_LOG(LogTemp, Error, TEXT("Unsupported operand type for evaluation"));
-      checkNoEntry();
-      return {};
+    case VSOperandTokenType::PipeVar: {
+      if (!GlobalEnviroment.Contains(TEXT("^")))
+        return LogAndCheck<VSEvaluatedValue>(TEXT("Pipe variable '^' is not defined in the environment."));
+
+      const auto& PipeValue = GlobalEnviroment[TEXT("^")];
+      return Visit(Overload{[&](const VSFunction& Func) -> VSEvaluatedValue {
+                              return LogAndCheck<VSEvaluatedValue>(TEXT("Pipe variable '^' cannot be a function."));
+                            },
+                            [&](const auto& Val) -> VSEvaluatedValue { return ToVSEvaluatedValue(Val); }},
+                   PipeValue);
+    }
+    default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operand type during evaluation."));
   }
 }
+auto UVordieScriptSubsystem::EvaluateArrayLiteral(const VSOperation& Op) -> VSEvaluatedValue {
+  VSEvaluatedArray Res;
+  for (const auto& Element : Op.Operands) {
+    const VSEvaluatedValue ElementVal = EvaluateExpression(Element);
+
+    VSContainerable CRes;
+    if (ElementVal.IsType<FString>()) CRes.Set<FString>(ElementVal.Get<FString>());
+    else if (ElementVal.IsType<int32>()) CRes.Set<int32>(ElementVal.Get<int32>());
+    else if (ElementVal.IsType<float>()) CRes.Set<float>(ElementVal.Get<float>());
+    else if (ElementVal.IsType<bool>()) CRes.Set<bool>(ElementVal.Get<bool>());
+    else if (ElementVal.IsType<UObjectPtr>()) CRes.Set<UObjectPtr>(ElementVal.Get<UObjectPtr>());
+    else return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported array element type during evaluation."));
+    Res.Add(CRes);
+  }
+  return ToVSEvaluatedValue(Res);
+}
+auto UVordieScriptSubsystem::EvaluateArrayAccess(const VSOperation& Op) -> VSEvaluatedValue {
+  if (Op.Operands.Num() != 2)
+    return LogAndCheck<VSEvaluatedValue>(TEXT("Array access operation requires exactly 2 operands."));
+
+  const VSEvaluatedValue ArrayVal = EvaluateExpression(Op.Operands[0]);
+  const VSEvaluatedValue IndexVal = EvaluateExpression(Op.Operands[1]);
+
+  if (!ArrayVal.IsType<VSEvaluatedArray>())
+    return LogAndCheck<VSEvaluatedValue>(TEXT("First operand of array access must be an array."));
+  if (!IndexVal.IsType<int32>())
+    return LogAndCheck<VSEvaluatedValue>(TEXT("Second operand of array access must be an integer index."));
+
+  const VSEvaluatedArray& Array = ArrayVal.Get<VSEvaluatedArray>();
+  int32 Index = IndexVal.Get<int32>();
+  if (Index < 0 || Index >= Array.Num())
+    return LogAndCheck<VSEvaluatedValue>(FString::Printf(TEXT("Array index %d is out of bounds."), Index));
+
+  auto ElementVal = Array[Index];
+  return Visit(Overload{[&](const auto& Val) -> VSEvaluatedValue { return ToVSEvaluatedValue(Val); }}, ElementVal);
+}
+auto UVordieScriptSubsystem::EvaluateMapLiteral(const VSOperation& Op) -> VSEvaluatedValue {
+  VSEvaluatedMap Res;
+  for (int32 i = 0; i < Op.Operands.Num(); i += 2) {
+    const VSEvaluatedValue KeyVal = EvaluateExpression(Op.Operands[i]);
+    const VSEvaluatedValue ValueVal = EvaluateExpression(Op.Operands[i + 1]);
+
+    if (!KeyVal.IsType<FString>()) return LogAndCheck<VSEvaluatedValue>(TEXT("Map keys must be strings."));
+
+    VSContainerable CKey;
+    CKey.Set<FString>(KeyVal.Get<FString>());
+
+    VSContainerable CValue;
+    if (ValueVal.IsType<FString>()) CValue.Set<FString>(ValueVal.Get<FString>());
+    else if (ValueVal.IsType<int32>()) CValue.Set<int32>(ValueVal.Get<int32>());
+    else if (ValueVal.IsType<float>()) CValue.Set<float>(ValueVal.Get<float>());
+    else if (ValueVal.IsType<bool>()) CValue.Set<bool>(ValueVal.Get<bool>());
+    else if (ValueVal.IsType<UObjectPtr>()) CValue.Set<UObjectPtr>(ValueVal.Get<UObjectPtr>());
+    else return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported map value type during evaluation."));
+
+    Res.Add(CKey.Get<FString>(), CValue);
+  }
+  return ToVSEvaluatedValue(Res);
+}
+auto UVordieScriptSubsystem::EvaluateMapAccess(const VSOperation& Op) -> VSEvaluatedValue {
+  if (Op.Operands.Num() != 2)
+    return LogAndCheck<VSEvaluatedValue>(TEXT("Map access operation requires exactly 2 operands."));
+
+  const VSEvaluatedValue MapVal = EvaluateExpression(Op.Operands[0]);
+  const VSEvaluatedValue KeyVal = EvaluateExpression(Op.Operands[1]);
+
+  if (!MapVal.IsType<VSEvaluatedMap>())
+    return LogAndCheck<VSEvaluatedValue>(TEXT("First operand of map access must be a map."));
+  if (!KeyVal.IsType<FString>())
+    return LogAndCheck<VSEvaluatedValue>(TEXT("Second operand of map access must be a string key."));
+
+  const VSEvaluatedMap& Map = MapVal.Get<VSEvaluatedMap>();
+  const FString& Key = KeyVal.Get<FString>();
+  if (!Map.Contains(Key))
+    return LogAndCheck<VSEvaluatedValue>(FString::Printf(TEXT("Map key '%s' does not exist."), *Key));
+
+  auto ElementVal = Map[Key];
+  return Visit(Overload{[&](const auto& Val) -> VSEvaluatedValue { return ToVSEvaluatedValue(Val); }}, ElementVal);
+}
+
+auto UVordieScriptSubsystem::EvaluateExpression(const VSExpression& Expr) -> VSEvaluatedValue { return {}; }
 
 auto TestScriptTreeGen(const FString& ScriptCode) -> FString {
   TArray<Token> Tokens = Tokenize(ScriptCode);
-  Script ParsedScript = ParseTokensToScript(Tokens);
+  VSScript ParsedScript = ParseTokensToScript(Tokens);
 
   for (const auto& Expr : ParsedScript.Expressions) {
     FString ExprStr = ExpressionToString(Expr);

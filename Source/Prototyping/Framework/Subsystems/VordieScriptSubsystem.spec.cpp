@@ -90,4 +90,10 @@ void FVordieScriptSubsystemSpec::Define() {
   Describe("Multi-statement scripts", [this]() {
     It("returns only the final expression's tree", [this]() { TestTree(TEXT("5 + 5\n10 + 2"), TEXT("(+ 10 2)")); });
   });
+
+  Describe("Dot operator", [this]() {
+    It("parses a dot operator with an identifier", [this]() { TestTree(TEXT("obj.prop"), TEXT("(. obj prop)")); });
+    It("parses a dot operator with a function call", [this]() { TestTree(TEXT("obj.func()"), TEXT("(. obj func)")); });
+    It("parses a dot operator with two integers", [this]() { TestTree(TEXT("1.2"), TEXT("(. 1 2)")); });
+  });
 }

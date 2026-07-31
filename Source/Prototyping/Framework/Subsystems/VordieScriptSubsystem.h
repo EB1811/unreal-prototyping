@@ -9,6 +9,65 @@
 
 // * Pratt parser implementation for the VordieScript language.
 
+enum class VSOperatorTokenType {
+  LeftParen,
+  RightParen,
+  LeftBrace,
+  RightBrace,
+  LeftSquare,
+  RightSquare,
+  Comma,
+
+  Dot,
+  Question,
+  Colon,
+  Pipe,
+
+  Equal,
+  NotEqual,
+  Less,
+  LessEqual,
+  Greater,
+  GreaterEqual,
+
+  Times,
+  Divide,
+  Plus,
+  Minus,
+
+  Not,
+  And,
+  Or,
+};
+enum class VSOperandTokenType {
+  Eof,
+  Eol,
+
+  Identifier,
+  Number,
+  String,
+  Boolean,
+  PipeVar,
+};
+struct Token {
+  TVariant<VSOperatorTokenType, VSOperandTokenType> Type;
+  FString Value;
+};
+using VSOperandValue = TVariant<FString, int32, bool>;
+struct VSOperand {
+  VSOperandTokenType Type;
+  VSOperandValue Value;
+};
+using VSExpression = TVariant<VSOperand, struct VSOperation>;
+struct VSOperation {
+  VSOperatorTokenType Operator;
+  FString Value;
+  TArray<VSExpression> Operands;
+};
+struct Script {
+  TArray<VSExpression> Expressions;
+};
+
 // GlobalEnviroment is not a UPORPERTY, so registering a UObject* as a symbol does not create a reference to it.
 // Check the pointer before using it, as it may have been garbage collected, and if it has, remove it from the GlobalEnviroment.
 using UObjectPtr = TWeakObjectPtr<UObject>;
@@ -43,4 +102,8 @@ public:
   TMap<FName, VSEnviromentContext> GlobalEnviroment;
 
   void RegisterSymbol(FName SymbolName, VSEnviromentContext SymbolValue);
+
+private:
+  auto EvaluateOperand(const VSOperand& Op) -> VSEvaluatedValue;
+  auto EvaluateExpression(const VSExpression& Expr) -> VSEvaluatedValue;
 };

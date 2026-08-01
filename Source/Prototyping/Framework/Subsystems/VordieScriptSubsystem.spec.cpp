@@ -186,6 +186,7 @@ void FVordieScriptSubsystemSpec::Define() {
       It("multiplies two numbers", [this]() { TestEvalInt(TEXT("4 * 2"), 8); });
       It("divides two numbers", [this]() { TestEvalInt(TEXT("8 / 2"), 4); });
       It("respects operator precedence", [this]() { TestEvalInt(TEXT("5 + 5 * 2"), 15); });
+      It("respects parentheses to override precedence", [this]() { TestEvalInt(TEXT("(5 + 5) * 2"), 20); });
     });
 
     Describe("Unary operators", [this]() {
@@ -221,6 +222,14 @@ void FVordieScriptSubsystemSpec::Define() {
       It("compares two equal strings", [this]() { TestEvalBool(TEXT("'abc' == 'abc'"), true); });
     });
 
+    Describe("Type coercion", [this]() {
+      It("compares an integer and a float for equality", [this]() { TestEvalBool(TEXT("5 == 5.0"), true); });
+      It("compares an integer and a float for inequality", [this]() { TestEvalBool(TEXT("5 != 5.0"), false); });
+      It("compares an integer and a float for less than", [this]() { TestEvalBool(TEXT("5 < 5.1"), true); });
+      It("turns an array into its length when compared to an integer",
+         [this]() { TestEvalBool(TEXT("[1, 2, 3] == 3"), true); });
+    });
+
     Describe("Array literals and access", [this]() {
       It("accesses the first element", [this]() { TestEvalInt(TEXT("[1, 2, 3][0]"), 1); });
       It("accesses the last element", [this]() { TestEvalInt(TEXT("[1, 2, 3][2]"), 3); });
@@ -244,6 +253,17 @@ void FVordieScriptSubsystemSpec::Define() {
         TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
         if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
           TestEqual(TEXT("Registered identifier 'x' should evaluate to 42."), Result.ReturnValue.Get<int32>(), 42);
+      });
+      It("uses an identifier in an expression", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        VSEnviromentContext Value;
+        Value.Set<int32>(10);
+        Subsystem->RegisterSymbol(FName(TEXT("y")), Value);
+
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("y + 5"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+          TestEqual(TEXT("Expression 'y + 5' should evaluate to 15."), Result.ReturnValue.Get<int32>(), 15);
       });
 
       It("calls a registered function with arguments", [this]() {

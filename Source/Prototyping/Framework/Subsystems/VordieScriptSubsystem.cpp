@@ -692,6 +692,100 @@ inline auto ApplyBinaryOperation<VSEvaluatedMap>(VSOperatorTokenType Op,
   }
   return Res;
 }
+template <typename T, typename U>
+inline auto ApplyBinaryOperation(VSOperatorTokenType Op, const T& LeftVal, const U& RightVal) -> VSEvaluatedValue {
+  return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation with different types"));
+}
+template <>
+inline auto ApplyBinaryOperation<FString, int32>(VSOperatorTokenType Op, const FString& LeftVal, const int32& RightVal)
+    -> VSEvaluatedValue {
+  if (Op == VSOperatorTokenType::Dot) {
+    auto _Res = LeftVal + "." + FString::FromInt(RightVal);
+    return ToVSEvaluatedValue(FCString::Atof(*_Res));
+  }
+  return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation with different types"));
+}
+template <>
+inline auto ApplyBinaryOperation<int32, FString>(VSOperatorTokenType Op, const int32& LeftVal, const FString& RightVal)
+    -> VSEvaluatedValue {
+  if (Op == VSOperatorTokenType::Dot) {
+    auto _Res = FString::FromInt(LeftVal) + "." + RightVal;
+    return ToVSEvaluatedValue(FCString::Atof(*_Res));
+  }
+  return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation with different types"));
+}
+template <>
+inline auto ApplyBinaryOperation<int32, float>(VSOperatorTokenType Op, const int32& LeftVal, const float& RightVal)
+    -> VSEvaluatedValue {
+  float LeftValAsFloat = static_cast<float>(LeftVal);
+  return ApplyBinaryOperation<float>(Op, LeftValAsFloat, RightVal);
+}
+template <>
+inline auto ApplyBinaryOperation<float, int32>(VSOperatorTokenType Op, const float& LeftVal, const int32& RightVal)
+    -> VSEvaluatedValue {
+  float RightValAsFloat = static_cast<float>(RightVal);
+  return ApplyBinaryOperation<float>(Op, LeftVal, RightValAsFloat);
+}
+template <>
+inline auto ApplyBinaryOperation<VSEvaluatedArray, int32>(VSOperatorTokenType Op,
+                                                          const VSEvaluatedArray& LeftVal,
+                                                          const int32& RightVal) -> VSEvaluatedValue {
+  switch (Op) {
+    case VSOperatorTokenType::Equal: return ToVSEvaluatedValue(LeftVal.Num() == RightVal);
+    case VSOperatorTokenType::NotEqual: return ToVSEvaluatedValue(LeftVal.Num() != RightVal);
+    case VSOperatorTokenType::Less: return ToVSEvaluatedValue(LeftVal.Num() < RightVal);
+    case VSOperatorTokenType::LessEqual: return ToVSEvaluatedValue(LeftVal.Num() <= RightVal);
+    case VSOperatorTokenType::Greater: return ToVSEvaluatedValue(LeftVal.Num() > RightVal);
+    case VSOperatorTokenType::GreaterEqual: return ToVSEvaluatedValue(LeftVal.Num() >= RightVal);
+    default:
+      return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation with different types"));
+  }
+}
+template <>
+inline auto ApplyBinaryOperation<int32, VSEvaluatedArray>(VSOperatorTokenType Op,
+                                                          const int32& LeftVal,
+                                                          const VSEvaluatedArray& RightVal) -> VSEvaluatedValue {
+  switch (Op) {
+    case VSOperatorTokenType::Equal: return ToVSEvaluatedValue(LeftVal == RightVal.Num());
+    case VSOperatorTokenType::NotEqual: return ToVSEvaluatedValue(LeftVal != RightVal.Num());
+    case VSOperatorTokenType::Less: return ToVSEvaluatedValue(LeftVal < RightVal.Num());
+    case VSOperatorTokenType::LessEqual: return ToVSEvaluatedValue(LeftVal <= RightVal.Num());
+    case VSOperatorTokenType::Greater: return ToVSEvaluatedValue(LeftVal > RightVal.Num());
+    case VSOperatorTokenType::GreaterEqual: return ToVSEvaluatedValue(LeftVal >= RightVal.Num());
+    default:
+      return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation with different types"));
+  }
+}
+template <>
+inline auto ApplyBinaryOperation<VSEvaluatedMap, int32>(VSOperatorTokenType Op,
+                                                        const VSEvaluatedMap& LeftVal,
+                                                        const int32& RightVal) -> VSEvaluatedValue {
+  switch (Op) {
+    case VSOperatorTokenType::Equal: return ToVSEvaluatedValue(LeftVal.Num() == RightVal);
+    case VSOperatorTokenType::NotEqual: return ToVSEvaluatedValue(LeftVal.Num() != RightVal);
+    case VSOperatorTokenType::Less: return ToVSEvaluatedValue(LeftVal.Num() < RightVal);
+    case VSOperatorTokenType::LessEqual: return ToVSEvaluatedValue(LeftVal.Num() <= RightVal);
+    case VSOperatorTokenType::Greater: return ToVSEvaluatedValue(LeftVal.Num() > RightVal);
+    case VSOperatorTokenType::GreaterEqual: return ToVSEvaluatedValue(LeftVal.Num() >= RightVal);
+    default:
+      return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation with different types"));
+  }
+}
+template <>
+inline auto ApplyBinaryOperation<int32, VSEvaluatedMap>(VSOperatorTokenType Op,
+                                                        const int32& LeftVal,
+                                                        const VSEvaluatedMap& RightVal) -> VSEvaluatedValue {
+  switch (Op) {
+    case VSOperatorTokenType::Equal: return ToVSEvaluatedValue(LeftVal == RightVal.Num());
+    case VSOperatorTokenType::NotEqual: return ToVSEvaluatedValue(LeftVal != RightVal.Num());
+    case VSOperatorTokenType::Less: return ToVSEvaluatedValue(LeftVal < RightVal.Num());
+    case VSOperatorTokenType::LessEqual: return ToVSEvaluatedValue(LeftVal <= RightVal.Num());
+    case VSOperatorTokenType::Greater: return ToVSEvaluatedValue(LeftVal > RightVal.Num());
+    case VSOperatorTokenType::GreaterEqual: return ToVSEvaluatedValue(LeftVal >= RightVal.Num());
+    default:
+      return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation with different types"));
+  }
+}
 
 // Evaluation functions.
 auto UVordieScriptSubsystem::EvaluateOperand(const VSOperand& Op) -> VSEvaluatedValue {
@@ -761,9 +855,17 @@ auto UVordieScriptSubsystem::EvalBinaryOperation(const VSOperation& Op) -> VSEva
     return LeftVal;  // Short-circuit
   VSEvaluatedValue RightVal = EvaluateExpression(Op.Operands[1]);
 
-  // * No type coercion for now.
-  if (LeftVal.GetIndex() != RightVal.GetIndex())
-    return LogAndCheck<VSEvaluatedValue>(TEXT("Operands must be of the same type for binary operations."));
+  if (LeftVal.GetIndex() != RightVal.GetIndex()) {
+    return Visit(Overload{[&](const auto& Left) -> VSEvaluatedValue {
+                   using T = typename TDecay<decltype(Left)>::Type;
+                   return Visit(Overload{[&](const auto& Right) -> VSEvaluatedValue {
+                                  using U = typename TDecay<decltype(Right)>::Type;
+                                  return ApplyBinaryOperation<T, U>(Op.Operator, Left, Right);
+                                }},
+                                RightVal);
+                 }},
+                 LeftVal);
+  }
 
   return Visit(Overload{[&](const auto& Left) -> VSEvaluatedValue {
                  using T = typename TDecay<decltype(Left)>::Type;
@@ -983,7 +1085,7 @@ UVordieScriptSubsystem::UVordieScriptSubsystem() {}
 
 void UVordieScriptSubsystem::RegisterSymbol(FName SymbolName, VSEnviromentContext SymbolValue) {
   if (GlobalEnviroment.Contains(SymbolName)) {
-    UE_LOG(LogTemp, Warning, TEXT("Symbol %s is already registered."), *SymbolName.ToString());
+    UE_LOG(LogTemp, Error, TEXT("Symbol %s is already registered."), *SymbolName.ToString());
     return;
   }
 

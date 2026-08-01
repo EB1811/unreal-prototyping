@@ -103,13 +103,21 @@ public:
 
   void RegisterSymbol(FName SymbolName, VSEnviromentContext SymbolValue);
 
+  auto EvaluateScript(const FString& ScriptCode) -> VSEvaluatedScript;
+
 private:
   auto EvaluateOperand(const VSOperand& Op) -> VSEvaluatedValue;
 
+  auto EvalUnaryOperation(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvalBinaryOperation(const VSOperation& Op) -> VSEvaluatedValue;
   auto EvaluateArrayLiteral(const VSOperation& Op) -> VSEvaluatedValue;
   auto EvaluateArrayAccess(const VSOperation& Op) -> VSEvaluatedValue;
   auto EvaluateMapLiteral(const VSOperation& Op) -> VSEvaluatedValue;
   auto EvaluateMapAccess(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvalTernaryOperation(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvalPipeOperation(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvalFuncArgsCall(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvaluateOperation(const VSOperation& Op) -> VSEvaluatedValue;
 
   auto EvaluateExpression(const VSExpression& Expr) -> VSEvaluatedValue;
 };

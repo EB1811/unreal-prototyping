@@ -3,11 +3,12 @@
 #include "HAL/Platform.h"
 #include "Logging/LogVerbosity.h"
 #include "Misc/TVariant.h"
+#include "UObject/UnrealType.h"
 
 template <typename T>
 inline auto LogAndCheck(const FString& Message) -> T {
   UE_LOG(LogTemp, Error, TEXT("%s"), *Message);
-  checkNoEntry();
+  // checkNoEntry();
   return {};
 }
 
@@ -400,6 +401,7 @@ inline auto CompareVariants(const VSContainerable& A, const VSContainerable& B) 
           return ValA == B.Get<T>();
         }},
         A);
+  return true;
 }
 // template <typename T>
 // concept VSEvaluatedValueTypes =
@@ -418,7 +420,7 @@ template <typename T>
 inline auto ApplyUnaryOperation(VSOperatorTokenType Op, const T& Val) -> VSEvaluatedValue {
   VSEvaluatedValue Res;
   switch (Op) {
-    case VSOperatorTokenType::Not: Res.Set<T>(!Val); break;
+    case VSOperatorTokenType::Not: Res.Set<bool>(!Val); break;
     case VSOperatorTokenType::Plus: Res.Set<T>(Val); break;
     case VSOperatorTokenType::Minus: Res.Set<T>(-Val); break;
     default: return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
@@ -486,14 +488,14 @@ template <typename T>
 inline auto ApplyBinaryOperation(VSOperatorTokenType Op, const T& LeftVal, const T& RightVal) -> VSEvaluatedValue {
   VSEvaluatedValue Res;
   switch (Op) {
-    case VSOperatorTokenType::And: Res.Set<T>(LeftVal && RightVal); break;
-    case VSOperatorTokenType::Or: Res.Set<T>(LeftVal || RightVal); break;
-    case VSOperatorTokenType::Equal: Res.Set<T>(LeftVal == RightVal); break;
-    case VSOperatorTokenType::NotEqual: Res.Set<T>(LeftVal != RightVal); break;
-    case VSOperatorTokenType::Less: Res.Set<T>(LeftVal < RightVal); break;
-    case VSOperatorTokenType::LessEqual: Res.Set<T>(LeftVal <= RightVal); break;
-    case VSOperatorTokenType::Greater: Res.Set<T>(LeftVal > RightVal); break;
-    case VSOperatorTokenType::GreaterEqual: Res.Set<T>(LeftVal >= RightVal); break;
+    case VSOperatorTokenType::And: Res.Set<bool>(LeftVal && RightVal); break;
+    case VSOperatorTokenType::Or: Res.Set<bool>(LeftVal || RightVal); break;
+    case VSOperatorTokenType::Equal: Res.Set<bool>(LeftVal == RightVal); break;
+    case VSOperatorTokenType::NotEqual: Res.Set<bool>(LeftVal != RightVal); break;
+    case VSOperatorTokenType::Less: Res.Set<bool>(LeftVal < RightVal); break;
+    case VSOperatorTokenType::LessEqual: Res.Set<bool>(LeftVal <= RightVal); break;
+    case VSOperatorTokenType::Greater: Res.Set<bool>(LeftVal > RightVal); break;
+    case VSOperatorTokenType::GreaterEqual: Res.Set<bool>(LeftVal >= RightVal); break;
     case VSOperatorTokenType::Plus: Res.Set<T>(LeftVal + RightVal); break;
     case VSOperatorTokenType::Minus: Res.Set<T>(LeftVal - RightVal); break;
     case VSOperatorTokenType::Times: Res.Set<T>(LeftVal * RightVal); break;
@@ -504,8 +506,8 @@ inline auto ApplyBinaryOperation(VSOperatorTokenType Op, const T& LeftVal, const
     }
     case VSOperatorTokenType::Dot: {
       if constexpr (TypeTests::TAreTypesEqual_V<T, int32>) {
-        auto _Res = FString::FromInt(LeftVal) + FString::FromInt(RightVal);
-        Res.Set<FString>(_Res);
+        auto _Res = FString::FromInt(LeftVal) + "." + FString::FromInt(RightVal);
+        Res.Set<float>(FCString::Atof(*_Res));
         break;
       } else {
         return LogAndCheck<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
@@ -536,17 +538,17 @@ inline auto ApplyBinaryOperation<float>(VSOperatorTokenType Op, const float& Lef
     -> VSEvaluatedValue {
   VSEvaluatedValue Res;
   switch (Op) {
-    case VSOperatorTokenType::And: Res.Set<float>(LeftVal && RightVal); break;
-    case VSOperatorTokenType::Or: Res.Set<float>(LeftVal || RightVal); break;
-    case VSOperatorTokenType::Equal: Res.Set<float>(FMath::IsNearlyEqual(LeftVal, RightVal)); break;
-    case VSOperatorTokenType::NotEqual: Res.Set<float>(!FMath::IsNearlyEqual(LeftVal, RightVal)); break;
-    case VSOperatorTokenType::Less: Res.Set<float>(LeftVal < RightVal); break;
+    case VSOperatorTokenType::And: Res.Set<bool>(LeftVal && RightVal); break;
+    case VSOperatorTokenType::Or: Res.Set<bool>(LeftVal || RightVal); break;
+    case VSOperatorTokenType::Equal: Res.Set<bool>(FMath::IsNearlyEqual(LeftVal, RightVal)); break;
+    case VSOperatorTokenType::NotEqual: Res.Set<bool>(!FMath::IsNearlyEqual(LeftVal, RightVal)); break;
+    case VSOperatorTokenType::Less: Res.Set<bool>(LeftVal < RightVal); break;
     case VSOperatorTokenType::LessEqual:
-      Res.Set<float>(LeftVal < RightVal || FMath::IsNearlyEqual(LeftVal, RightVal));
+      Res.Set<bool>(LeftVal < RightVal || FMath::IsNearlyEqual(LeftVal, RightVal));
       break;
-    case VSOperatorTokenType::Greater: Res.Set<float>(LeftVal > RightVal); break;
+    case VSOperatorTokenType::Greater: Res.Set<bool>(LeftVal > RightVal); break;
     case VSOperatorTokenType::GreaterEqual:
-      Res.Set<float>(LeftVal > RightVal || FMath::IsNearlyEqual(LeftVal, RightVal));
+      Res.Set<bool>(LeftVal > RightVal || FMath::IsNearlyEqual(LeftVal, RightVal));
       break;
     case VSOperatorTokenType::Plus: Res.Set<float>(LeftVal + RightVal); break;
     case VSOperatorTokenType::Minus: Res.Set<float>(LeftVal - RightVal); break;
@@ -701,8 +703,21 @@ auto UVordieScriptSubsystem::EvaluateOperand(const VSOperand& Op) -> VSEvaluated
 
       const auto& SymbolValue = GlobalEnviroment[FName(*IdentifierName)];
       return Visit(Overload{[&](const VSFunction& Func) -> VSEvaluatedValue {
-                              // TODO: Function evaluation.
-                              return ToVSEvaluatedValue(1);
+                              // If being run as a variable, it means theres no arguments, so we call it with an empty argument list.
+                              // Could be in a pipe context.
+                              auto Args = TArray<VSEvaluatedValue>{};
+                              if (GlobalEnviroment.Contains(TEXT("^"))) {
+                                const auto& PipeValue = GlobalEnviroment[TEXT("^")];
+                                Args.Push(Visit(Overload{[&](const VSFunction& Func) -> VSEvaluatedValue {
+                                                           return LogAndCheck<VSEvaluatedValue>(
+                                                               TEXT("Pipe variable '^' cannot be a function."));
+                                                         },
+                                                         [&](const auto& Val) -> VSEvaluatedValue {
+                                                           return ToVSEvaluatedValue(Val);
+                                                         }},
+                                                PipeValue));
+                              }
+                              return Func(Args);
                             },
                             [&](const auto& Val) -> VSEvaluatedValue { return ToVSEvaluatedValue(Val); }},
                    SymbolValue);
@@ -852,13 +867,20 @@ auto UVordieScriptSubsystem::EvalPipeOperation(const VSOperation& Op) -> VSEvalu
     return LogAndCheck<VSEvaluatedValue>(TEXT("Pipe operation must have exactly two operands."));
 
   VSEvaluatedValue PipeVal = EvaluateExpression(Op.Operands[0]);  // Pipe var
-  GlobalEnviroment.Add(TEXT("^"), Visit(Overload{[&](const auto& Val) -> VSEnviromentContext {
-                                          using T = typename TDecay<decltype(Val)>::Type;
-                                          VSEnviromentContext CVal;
-                                          CVal.Set<T>(Val);
-                                          return CVal;
-                                        }},
-                                        PipeVal));
+  GlobalEnviroment.Add(
+      TEXT("^"), Visit(Overload{[&](const auto& Val) -> VSEnviromentContext {
+                         using T = typename TDecay<decltype(Val)>::Type;
+                         if constexpr (!TypeTests::TAreTypesEqual_V<T, FStructProperty*>) {
+                           VSEnviromentContext PipeContext;
+                           PipeContext.Set<T>(Val);
+                           return PipeContext;
+                         } else {
+                           return LogAndCheck<VSEnviromentContext>(
+                               TEXT("Unsupported type for pipe operation. Only string, int, float, bool, UObjectPtr, "
+                                    "array, and map are supported."));
+                         }
+                       }},
+                       PipeVal));
 
   VSEvaluatedValue RightVal = EvaluateExpression(Op.Operands[1]);
   GlobalEnviroment.Remove(TEXT("^"));

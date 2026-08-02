@@ -20,4 +20,7 @@ public:
   class APlayerCharacter* PlayerCharacter;
   UPROPERTY(EditAnywhere)
   class ADialogueSystem* DialogueSystem;
+
+  UPROPERTY(EditAnywhere)
+  int32 Health = 0;
 };

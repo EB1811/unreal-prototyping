@@ -117,6 +117,7 @@ private:
   auto EvalTernaryOperation(const VSOperation& Op) -> VSEvaluatedValue;
   auto EvalPipeOperation(const VSOperation& Op) -> VSEvaluatedValue;
   auto EvalFuncArgsCall(const VSOperation& Op) -> VSEvaluatedValue;
+  auto EvalDotObjectAccess(const VSOperation& Op) -> VSEvaluatedValue;
   auto EvaluateOperation(const VSOperation& Op) -> VSEvaluatedValue;
 
   auto EvaluateExpression(const VSExpression& Expr) -> VSEvaluatedValue;

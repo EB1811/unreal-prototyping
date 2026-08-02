@@ -1,3 +1,4 @@
+#include "Prototyping/AI/TestEnemyManager.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/UObjectGlobals.h"
 #include "VordieScriptSubsystem.h"
@@ -281,6 +282,23 @@ void FVordieScriptSubsystemSpec::Define() {
         TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
         if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
           TestEqual(TEXT("AddOne(5) should evaluate to 6."), Result.ReturnValue.Get<int32>(), 6);
+      });
+    });
+
+    Describe("Reflection access", [this]() {
+      It("accesses a reflected property of a UObject via the dot operator", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>();
+        EnemyManager->Health = 150;
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.Health > 100"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be a bool."), Result.ReturnValue.IsType<bool>()))
+          TestEqual(TEXT("'enemy.Health > 100' should evaluate to true."), Result.ReturnValue.Get<bool>(), true);
       });
     });
   });

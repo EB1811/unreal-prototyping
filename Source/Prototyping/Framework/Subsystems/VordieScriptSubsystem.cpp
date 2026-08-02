@@ -990,10 +990,8 @@ auto UVordieScriptSubsystem::EvalPipeOperation(const VSOperation& Op) -> VSEvalu
   return RightVal;
 }
 auto UVordieScriptSubsystem::EvalFuncArgsCall(const VSOperation& Op) -> VSEvaluatedValue {
-  if (Op.Operands.Num() != 2)
-    return LogAndCheck<VSEvaluatedValue>(TEXT("Function call operation must have exactly two operands."));
-  if (!Op.Operands[0].IsType<VSOperand>() || Op.Operands[0].Get<VSOperand>().Type != VSOperandTokenType::Identifier)
-    return LogAndCheck<VSEvaluatedValue>(TEXT("First operand of function call must be an identifier."));
+  check(Op.Operands.Num() == 2);
+  check(Op.Operands[0].IsType<VSOperand>() && Op.Operands[0].Get<VSOperand>().Type == VSOperandTokenType::Identifier);
 
   const FString FuncName = Op.Operands[0].Get<VSOperand>().Value.Get<FString>();
   if (!GlobalEnviroment.Contains(FName(*FuncName)))
@@ -1012,6 +1010,45 @@ auto UVordieScriptSubsystem::EvalFuncArgsCall(const VSOperation& Op) -> VSEvalua
   for (const auto& ArgExpr : ArgsOp.Operands) ArgValues.Push(EvaluateExpression(ArgExpr));
 
   return Func(ArgValues);
+}
+auto UVordieScriptSubsystem::EvalDotObjectAccess(const VSOperation& Op) -> VSEvaluatedValue {
+  check(Op.Operands.Num() == 2);
+  check(Op.Operands[0].IsType<VSOperand>() && Op.Operands[0].Get<VSOperand>().Type == VSOperandTokenType::Identifier);
+  check(Op.Operands[1].IsType<VSOperand>() && Op.Operands[1].Get<VSOperand>().Type == VSOperandTokenType::Identifier);
+
+  const FString ObjectName = Op.Operands[0].Get<VSOperand>().Value.Get<FString>();
+  const FString PropertyName = Op.Operands[1].Get<VSOperand>().Value.Get<FString>();
+
+  if (!GlobalEnviroment.Contains(FName(*ObjectName)))
+    return LogAndCheck<VSEvaluatedValue>(FString::Printf(TEXT("Undefined object: %s"), *ObjectName));
+  const auto& ObjectValue = GlobalEnviroment[FName(*ObjectName)];
+  check(ObjectValue.IsType<UObjectPtr>());
+  const auto& ObjectPtr = ObjectValue.Get<UObjectPtr>();
+
+  FProperty* Prop = ObjectPtr->GetClass()->FindPropertyByName(FName(*PropertyName));
+  check(Prop);
+  if (FStrProperty* StrProp = CastField<FStrProperty>(Prop)) {
+    FString PropVal = StrProp->GetPropertyValue_InContainer(ObjectPtr.Get());
+    return ToVSEvaluatedValue<FString>(PropVal);
+  } else if (FIntProperty* IntProp = CastField<FIntProperty>(Prop)) {
+    int32 PropVal = IntProp->GetPropertyValue_InContainer(ObjectPtr.Get());
+    return ToVSEvaluatedValue<int32>(PropVal);
+  } else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(Prop)) {
+    float PropVal = FloatProp->GetPropertyValue_InContainer(ObjectPtr.Get());
+    return ToVSEvaluatedValue<float>(PropVal);
+  } else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Prop)) {
+    bool PropVal = BoolProp->GetPropertyValue_InContainer(ObjectPtr.Get());
+    return ToVSEvaluatedValue<bool>(PropVal);
+  } else if (FStructProperty* StructProp = CastField<FStructProperty>(Prop)) {
+    void* StructValuePtr = StructProp->ContainerPtrToValuePtr<void>(ObjectPtr.Get());
+    return ToVSEvaluatedValue<FStructProperty*>(StructProp);
+  } else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop)) {
+    UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(ObjectPtr.Get());
+    return ToVSEvaluatedValue<UObjectPtr>(UObjectPtr(PropVal));
+  } else {
+    return LogAndCheck<VSEvaluatedValue>(
+        FString::Printf(TEXT("Unsupported property type for dot access: %s"), *Prop->GetClass()->GetName()));
+  }
 }
 
 auto UVordieScriptSubsystem::EvaluateOperation(const VSOperation& Op) -> VSEvaluatedValue {
@@ -1059,6 +1096,7 @@ auto UVordieScriptSubsystem::EvaluateOperation(const VSOperation& Op) -> VSEvalu
   // Function call.
   if (Op.Operator == VSOperatorTokenType::LeftParen && Op.Value == "call") return EvalFuncArgsCall(Op);
   // Todo: FStructProperty, UObjectPtr, dot operation.
+  if (Op.Operator == VSOperatorTokenType::Dot) return EvalDotObjectAccess(Op);
 
   return LogAndCheck<VSEvaluatedValue>(FString::Printf(TEXT("Unsupported operation: %s"), *Op.Value));
 }

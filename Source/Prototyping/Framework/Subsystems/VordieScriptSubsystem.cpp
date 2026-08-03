@@ -455,11 +455,11 @@ inline auto ApplyUnaryOperation<UObjectPtr>(VSOperatorTokenType Op, const UObjec
   return Res;
 }
 template <>
-inline auto ApplyUnaryOperation<FStructProperty*>(VSOperatorTokenType Op, FStructProperty* const& Val)
+inline auto ApplyUnaryOperation<VSStructInstance>(VSOperatorTokenType Op, const VSStructInstance& Val)
     -> VSEvaluatedValue {
   VSEvaluatedValue Res;
   switch (Op) {
-    case VSOperatorTokenType::Not: Res.Set<bool>(Val == nullptr); break;
+    case VSOperatorTokenType::Not: Res.Set<bool>(Val.ContainerPtr == nullptr); break;
     default: return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
   }
   return Res;
@@ -590,9 +590,9 @@ inline auto ApplyBinaryOperation<UObjectPtr>(VSOperatorTokenType Op,
   return Res;
 }
 template <>
-inline auto ApplyBinaryOperation<FStructProperty*>(VSOperatorTokenType Op,
-                                                   FStructProperty* const& LeftVal,
-                                                   FStructProperty* const& RightVal) -> VSEvaluatedValue {
+inline auto ApplyBinaryOperation<VSStructInstance>(VSOperatorTokenType Op,
+                                                   const VSStructInstance& LeftVal,
+                                                   const VSStructInstance& RightVal) -> VSEvaluatedValue {
   VSEvaluatedValue Res;
   switch (Op) {
     case VSOperatorTokenType::Equal: Res.Set<bool>(LeftVal == RightVal); break;
@@ -958,7 +958,7 @@ auto UVordieScriptSubsystem::EvalPipeOperation(const VSOperation& Op) -> VSEvalu
   GlobalEnviroment.Add(
       TEXT("^"), Visit(Overload{[&](const auto& Val) -> VSEnviromentContext {
                          using T = typename TDecay<decltype(Val)>::Type;
-                         if constexpr (!TypeTests::TAreTypesEqual_V<T, FStructProperty*>) {
+                         if constexpr (!TypeTests::TAreTypesEqual_V<T, VSStructInstance>) {
                            VSEnviromentContext PipeContext;
                            PipeContext.Set<T>(Val);
                            return PipeContext;
@@ -995,6 +995,38 @@ auto UVordieScriptSubsystem::EvalFuncArgsCall(const VSOperation& Op) -> VSEvalua
 
   return Func(ArgValues);
 }
+// Extracts a single scalar value pointed to by ValuePtr into a VSContainerable, based on Prop's reflected type.
+inline auto ExtractContainerable(FProperty* Prop, const void* ValuePtr) -> VSContainerable {
+  VSContainerable Res;
+  if (FStrProperty* StrProp = CastField<FStrProperty>(Prop)) Res.Set<FString>(StrProp->GetPropertyValue(ValuePtr));
+  else if (FIntProperty* IntProp = CastField<FIntProperty>(Prop)) Res.Set<int32>(IntProp->GetPropertyValue(ValuePtr));
+  else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(Prop))
+    Res.Set<float>(FloatProp->GetPropertyValue(ValuePtr));
+  else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Prop))
+    Res.Set<bool>(BoolProp->GetPropertyValue(ValuePtr));
+  else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop))
+    Res.Set<UObjectPtr>(UObjectPtr(ObjectProp->GetObjectPropertyValue(ValuePtr)));
+  else Res.Set<FString>(FString::Printf(TEXT("<unsupported type: %s>"), *Prop->GetClass()->GetName()));
+  return Res;
+}
+inline auto ExtractArrayProperty(FArrayProperty* ArrProp, const void* ContainerValuePtr) -> VSEvaluatedValue {
+  FScriptArrayHelper Helper(ArrProp, ContainerValuePtr);
+  VSEvaluatedArray Res;
+  for (int32 i = 0; i < Helper.Num(); ++i) Res.Add(ExtractContainerable(ArrProp->Inner, Helper.GetRawPtr(i)));
+  return ToVSEvaluatedValue(Res);
+}
+inline auto ExtractMapProperty(FMapProperty* MapProp, const void* ContainerValuePtr) -> VSEvaluatedValue {
+  FScriptMapHelper Helper(MapProp, ContainerValuePtr);
+  VSEvaluatedMap Res;
+  for (int32 i = 0; i < Helper.GetMaxIndex(); ++i) {
+    if (!Helper.IsValidIndex(i)) continue;
+
+    VSContainerable Key = ExtractContainerable(MapProp->KeyProp, Helper.GetKeyPtr(i));
+    check(Key.IsType<FString>());
+    Res.Add(Key.Get<FString>(), ExtractContainerable(MapProp->ValueProp, Helper.GetValuePtr(i)));
+  }
+  return ToVSEvaluatedValue(Res);
+}
 auto UVordieScriptSubsystem::EvalDotObjectAccess(const VSOperation& Op) -> VSEvaluatedValue {
   check(Op.Operands.Num() == 2);
   check(Op.Operands[1].IsType<VSOperand>() && Op.Operands[1].Get<VSOperand>().Type == VSOperandTokenType::Identifier);
@@ -1002,7 +1034,7 @@ auto UVordieScriptSubsystem::EvalDotObjectAccess(const VSOperation& Op) -> VSEva
   const FString PropertyName = Op.Operands[1].Get<VSOperand>().Value.Get<FString>();
 
   const auto& Left = EvaluateExpression(Op.Operands[0]);
-  check(Left.IsType<UObjectPtr>() || Left.IsType<FStructProperty*>());
+  check(Left.IsType<UObjectPtr>() || Left.IsType<VSStructInstance>());
   if (const auto& ObjectPtr = Left.TryGet<UObjectPtr>()) {
     FProperty* Prop = (*ObjectPtr)->GetClass()->FindPropertyByName(FName(*PropertyName));
     check(Prop);
@@ -1020,42 +1052,53 @@ auto UVordieScriptSubsystem::EvalDotObjectAccess(const VSOperation& Op) -> VSEva
       bool PropVal = BoolProp->GetPropertyValue_InContainer(ObjectPtr->Get());
       return ToVSEvaluatedValue<bool>(PropVal);
     } else if (FStructProperty* StructProp = CastField<FStructProperty>(Prop)) {
-      return ToVSEvaluatedValue<FStructProperty*>(StructProp);
+      return ToVSEvaluatedValue<VSStructInstance>(
+          VSStructInstance{StructProp, StructProp->ContainerPtrToValuePtr<void>(ObjectPtr->Get())});
     } else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop)) {
       UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(ObjectPtr->Get());
       return ToVSEvaluatedValue<UObjectPtr>(UObjectPtr(PropVal));
+    } else if (FArrayProperty* ArrProp = CastField<FArrayProperty>(Prop)) {
+      return ExtractArrayProperty(ArrProp, ArrProp->ContainerPtrToValuePtr<void>(ObjectPtr->Get()));
+    } else if (FMapProperty* MapProp = CastField<FMapProperty>(Prop)) {
+      return ExtractMapProperty(MapProp, MapProp->ContainerPtrToValuePtr<void>(ObjectPtr->Get()));
     } else {
       return EnsureReturn<VSEvaluatedValue>(
           FString::Printf(TEXT("Unsupported property type for dot access: %s"), *Prop->GetClass()->GetName()));
     }
-  } else if (const auto& StructProp = Left.TryGet<FStructProperty*>()) {
-    FProperty* Prop = (*StructProp)->Struct->FindPropertyByName(FName(*PropertyName));
+  } else if (const auto& StructInstance = Left.TryGet<VSStructInstance>()) {
+    FProperty* Prop = StructInstance->Property->Struct->FindPropertyByName(FName(*PropertyName));
     check(Prop);
+    void* ContainerPtr = StructInstance->ContainerPtr;
     // Since the FProperty could be of any type, handle the types explicitly.
     if (FStrProperty* StrProp = CastField<FStrProperty>(Prop)) {
-      FString PropVal = StrProp->GetPropertyValue_InContainer(StructProp);
+      FString PropVal = StrProp->GetPropertyValue_InContainer(ContainerPtr);
       return ToVSEvaluatedValue<FString>(PropVal);
     } else if (FIntProperty* IntProp = CastField<FIntProperty>(Prop)) {
-      int32 PropVal = IntProp->GetPropertyValue_InContainer(StructProp);
+      int32 PropVal = IntProp->GetPropertyValue_InContainer(ContainerPtr);
       return ToVSEvaluatedValue<int32>(PropVal);
     } else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(Prop)) {
-      float PropVal = FloatProp->GetPropertyValue_InContainer(StructProp);
+      float PropVal = FloatProp->GetPropertyValue_InContainer(ContainerPtr);
       return ToVSEvaluatedValue<float>(PropVal);
     } else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Prop)) {
-      bool PropVal = BoolProp->GetPropertyValue_InContainer(StructProp);
+      bool PropVal = BoolProp->GetPropertyValue_InContainer(ContainerPtr);
       return ToVSEvaluatedValue<bool>(PropVal);
     } else if (FStructProperty* NestedStructProp = CastField<FStructProperty>(Prop)) {
-      return ToVSEvaluatedValue<FStructProperty*>(NestedStructProp);
+      return ToVSEvaluatedValue<VSStructInstance>(
+          VSStructInstance{NestedStructProp, NestedStructProp->ContainerPtrToValuePtr<void>(ContainerPtr)});
     } else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop)) {
-      UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(StructProp);
+      UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(ContainerPtr);
       return ToVSEvaluatedValue<UObjectPtr>(UObjectPtr(PropVal));
+    } else if (FArrayProperty* ArrProp = CastField<FArrayProperty>(Prop)) {
+      return ExtractArrayProperty(ArrProp, ArrProp->ContainerPtrToValuePtr<void>(ContainerPtr));
+    } else if (FMapProperty* MapProp = CastField<FMapProperty>(Prop)) {
+      return ExtractMapProperty(MapProp, MapProp->ContainerPtrToValuePtr<void>(ContainerPtr));
     } else {
       return EnsureReturn<VSEvaluatedValue>(
           FString::Printf(TEXT("Unsupported property type for dot access: %s"), *Prop->GetClass()->GetName()));
     }
   } else {
     return EnsureReturn<VSEvaluatedValue>(
-        TEXT("Left operand of dot operation must be a UObjectPtr or FStructProperty*"));
+        TEXT("Left operand of dot operation must be a UObjectPtr or VSStructInstance"));
   }
 }
 

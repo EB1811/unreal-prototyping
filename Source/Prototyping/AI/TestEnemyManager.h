@@ -12,6 +12,9 @@ struct FTestEnemyBehaviorParams {
 
   UPROPERTY(EditAnywhere, SaveGame)
   bool bAggressive;
+
+  UPROPERTY(EditAnywhere)
+  TArray<int32> Levels;
 };
 
 UCLASS(Blueprintable)
@@ -38,4 +41,13 @@ public:
 
   UPROPERTY(EditAnywhere)
   int32 Health = 0;
+
+  UPROPERTY(EditAnywhere)
+  bool bIsAlive = false;
+
+  UPROPERTY(EditAnywhere)
+  FString Name;
+
+  UPROPERTY(EditAnywhere)
+  TMap<FString, int32> Stats;
 };

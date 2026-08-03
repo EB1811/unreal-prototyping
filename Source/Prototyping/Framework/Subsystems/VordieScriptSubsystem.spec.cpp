@@ -292,6 +292,66 @@ void FVordieScriptSubsystemSpec::Define() {
           TestEqual(TEXT("'enemy.BehaviourParams.bAggressive' should evaluate to true."),
                     Result.ReturnValue.Get<bool>(), true);
       });
+
+      It("accesses a reflected bool property of an actor via the dot operator", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>();
+        EnemyManager->bIsAlive = true;
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.bIsAlive"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be a bool."), Result.ReturnValue.IsType<bool>()))
+          TestEqual(TEXT("'enemy.bIsAlive' should evaluate to true."), Result.ReturnValue.Get<bool>(), true);
+      });
+
+      It("accesses a reflected string property of an actor via the dot operator", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>();
+        EnemyManager->Name = TEXT("Grunt");
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.Name"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be an FString."), Result.ReturnValue.IsType<FString>()))
+          TestEqual(TEXT("'enemy.Name' should evaluate to 'Grunt'."), Result.ReturnValue.Get<FString>(), TEXT("Grunt"));
+      });
+
+      It("accesses an element of a reflected array property of an actor's struct via the dot operator", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>();
+        EnemyManager->BehaviourParams.Levels = {10, 20, 30};
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.BehaviourParams.Levels[1]"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+          TestEqual(TEXT("'enemy.Levels[1]' should evaluate to 20."), Result.ReturnValue.Get<int32>(), 20);
+      });
+
+      It("accesses a value of a reflected map property of an actor via the dot operator", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>();
+        EnemyManager->Stats = {{TEXT("strength"), 5}, {TEXT("agility"), 7}};
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.Stats{'agility'}"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+          TestEqual(TEXT("'enemy.Stats{'agility'}' should evaluate to 7."), Result.ReturnValue.Get<int32>(), 7);
+      });
     });
   });
 }

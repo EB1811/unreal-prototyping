@@ -72,11 +72,23 @@ struct VSScript {
 // Check the pointer before using it, as it may have been garbage collected, and if it has, remove it from the GlobalEnviroment.
 using UObjectPtr = TWeakObjectPtr<UObject>;
 
-using VSContainerable = TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*>;
+// Pairs a FStructProperty's metadata with a pointer to the actual struct instance it describes,
+// since the property alone does not know where its value lives in memory.
+struct VSStructInstance {
+  FStructProperty* Property = nullptr;
+  void* ContainerPtr = nullptr;
+
+  bool operator==(const VSStructInstance& Other) const {
+    return Property == Other.Property && ContainerPtr == Other.ContainerPtr;
+  }
+  bool operator!=(const VSStructInstance& Other) const { return !(*this == Other); }
+};
+
+using VSContainerable = TVariant<FString, int32, float, bool, UObjectPtr, VSStructInstance>;
 using VSEvaluatedArray = TArray<VSContainerable>;
 using VSEvaluatedMap = TMap<FString, VSContainerable>;
 using VSEvaluatedValue =
-    TVariant<FString, int32, float, bool, UObjectPtr, FStructProperty*, VSEvaluatedArray, VSEvaluatedMap>;
+    TVariant<FString, int32, float, bool, UObjectPtr, VSStructInstance, VSEvaluatedArray, VSEvaluatedMap>;
 
 using VSFunction = TFunction<VSEvaluatedValue(const TArray<VSEvaluatedValue>&)>;
 using VSEnviromentContext =

@@ -1013,41 +1013,66 @@ auto UVordieScriptSubsystem::EvalFuncArgsCall(const VSOperation& Op) -> VSEvalua
 }
 auto UVordieScriptSubsystem::EvalDotObjectAccess(const VSOperation& Op) -> VSEvaluatedValue {
   check(Op.Operands.Num() == 2);
-  check(Op.Operands[0].IsType<VSOperand>() && Op.Operands[0].Get<VSOperand>().Type == VSOperandTokenType::Identifier);
   check(Op.Operands[1].IsType<VSOperand>() && Op.Operands[1].Get<VSOperand>().Type == VSOperandTokenType::Identifier);
 
-  const FString ObjectName = Op.Operands[0].Get<VSOperand>().Value.Get<FString>();
   const FString PropertyName = Op.Operands[1].Get<VSOperand>().Value.Get<FString>();
 
-  if (!GlobalEnviroment.Contains(FName(*ObjectName)))
-    return LogAndCheck<VSEvaluatedValue>(FString::Printf(TEXT("Undefined object: %s"), *ObjectName));
-  const auto& ObjectValue = GlobalEnviroment[FName(*ObjectName)];
-  check(ObjectValue.IsType<UObjectPtr>());
-  const auto& ObjectPtr = ObjectValue.Get<UObjectPtr>();
+  const auto& LeftObject = EvaluateExpression(Op.Operands[0]);
+  check(LeftObject.IsType<UObjectPtr>() || LeftObject.IsType<FStructProperty*>());
 
-  FProperty* Prop = ObjectPtr->GetClass()->FindPropertyByName(FName(*PropertyName));
-  check(Prop);
-  if (FStrProperty* StrProp = CastField<FStrProperty>(Prop)) {
-    FString PropVal = StrProp->GetPropertyValue_InContainer(ObjectPtr.Get());
-    return ToVSEvaluatedValue<FString>(PropVal);
-  } else if (FIntProperty* IntProp = CastField<FIntProperty>(Prop)) {
-    int32 PropVal = IntProp->GetPropertyValue_InContainer(ObjectPtr.Get());
-    return ToVSEvaluatedValue<int32>(PropVal);
-  } else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(Prop)) {
-    float PropVal = FloatProp->GetPropertyValue_InContainer(ObjectPtr.Get());
-    return ToVSEvaluatedValue<float>(PropVal);
-  } else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Prop)) {
-    bool PropVal = BoolProp->GetPropertyValue_InContainer(ObjectPtr.Get());
-    return ToVSEvaluatedValue<bool>(PropVal);
-  } else if (FStructProperty* StructProp = CastField<FStructProperty>(Prop)) {
-    void* StructValuePtr = StructProp->ContainerPtrToValuePtr<void>(ObjectPtr.Get());
-    return ToVSEvaluatedValue<FStructProperty*>(StructProp);
-  } else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop)) {
-    UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(ObjectPtr.Get());
-    return ToVSEvaluatedValue<UObjectPtr>(UObjectPtr(PropVal));
+  if (const auto& ObjectPtr = LeftObject.TryGet<UObjectPtr>()) {
+    FProperty* Prop = (*ObjectPtr)->GetClass()->FindPropertyByName(FName(*PropertyName));
+    check(Prop);
+    // Since the FProperty could be of any type, handle the types explicitly.
+    if (FStrProperty* StrProp = CastField<FStrProperty>(Prop)) {
+      FString PropVal = StrProp->GetPropertyValue_InContainer(ObjectPtr->Get());
+      return ToVSEvaluatedValue<FString>(PropVal);
+    } else if (FIntProperty* IntProp = CastField<FIntProperty>(Prop)) {
+      int32 PropVal = IntProp->GetPropertyValue_InContainer(ObjectPtr->Get());
+      return ToVSEvaluatedValue<int32>(PropVal);
+    } else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(Prop)) {
+      float PropVal = FloatProp->GetPropertyValue_InContainer(ObjectPtr->Get());
+      return ToVSEvaluatedValue<float>(PropVal);
+    } else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Prop)) {
+      bool PropVal = BoolProp->GetPropertyValue_InContainer(ObjectPtr->Get());
+      return ToVSEvaluatedValue<bool>(PropVal);
+    } else if (FStructProperty* StructProp = CastField<FStructProperty>(Prop)) {
+      return ToVSEvaluatedValue<FStructProperty*>(StructProp);
+    } else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop)) {
+      UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(ObjectPtr->Get());
+      return ToVSEvaluatedValue<UObjectPtr>(UObjectPtr(PropVal));
+    } else {
+      return LogAndCheck<VSEvaluatedValue>(
+          FString::Printf(TEXT("Unsupported property type for dot access: %s"), *Prop->GetClass()->GetName()));
+    }
+  } else if (const auto& StructProp = LeftObject.TryGet<FStructProperty*>()) {
+    FProperty* Prop = (*StructProp)->Struct->FindPropertyByName(FName(*PropertyName));
+    check(Prop);
+    // Since the FProperty could be of any type, handle the types explicitly.
+    if (FStrProperty* StrProp = CastField<FStrProperty>(Prop)) {
+      FString PropVal = StrProp->GetPropertyValue_InContainer(StructProp);
+      return ToVSEvaluatedValue<FString>(PropVal);
+    } else if (FIntProperty* IntProp = CastField<FIntProperty>(Prop)) {
+      int32 PropVal = IntProp->GetPropertyValue_InContainer(StructProp);
+      return ToVSEvaluatedValue<int32>(PropVal);
+    } else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(Prop)) {
+      float PropVal = FloatProp->GetPropertyValue_InContainer(StructProp);
+      return ToVSEvaluatedValue<float>(PropVal);
+    } else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Prop)) {
+      bool PropVal = BoolProp->GetPropertyValue_InContainer(StructProp);
+      return ToVSEvaluatedValue<bool>(PropVal);
+    } else if (FStructProperty* NestedStructProp = CastField<FStructProperty>(Prop)) {
+      return ToVSEvaluatedValue<FStructProperty*>(NestedStructProp);
+    } else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop)) {
+      UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(StructProp);
+      return ToVSEvaluatedValue<UObjectPtr>(UObjectPtr(PropVal));
+    } else {
+      return LogAndCheck<VSEvaluatedValue>(
+          FString::Printf(TEXT("Unsupported property type for dot access: %s"), *Prop->GetClass()->GetName()));
+    }
   } else {
     return LogAndCheck<VSEvaluatedValue>(
-        FString::Printf(TEXT("Unsupported property type for dot access: %s"), *Prop->GetClass()->GetName()));
+        TEXT("Left operand of dot operation must be a UObjectPtr or FStructProperty*"));
   }
 }
 
@@ -1084,8 +1109,9 @@ auto UVordieScriptSubsystem::EvaluateOperation(const VSOperation& Op) -> VSEvalu
     case VSOperatorTokenType::Times:
     case VSOperatorTokenType::Divide: return EvalBinaryOperation(Op);
     case VSOperatorTokenType::Dot:
-      if (Op.Operands.Num() == 2 && (Op.Operands[0].TryGet<VSOperand>()->Type == VSOperandTokenType::Number) &&
-          (Op.Operands[1].TryGet<VSOperand>()->Type == VSOperandTokenType::Number))
+      if (Op.Operands.Num() == 2 &&
+          (Op.Operands[0].IsType<VSOperand>() && Op.Operands[0].Get<VSOperand>().Type == VSOperandTokenType::Number) &&
+          (Op.Operands[1].IsType<VSOperand>() && Op.Operands[1].Get<VSOperand>().Type == VSOperandTokenType::Number))
         return EvalBinaryOperation(Op);
     default: break;
   }

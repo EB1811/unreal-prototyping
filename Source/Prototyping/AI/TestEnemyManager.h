@@ -6,12 +6,24 @@
 #include "GameFramework/Info.h"
 #include "TestEnemyManager.generated.h"
 
+USTRUCT()
+struct FTestEnemyBehaviorParams {
+  GENERATED_BODY()
+
+  UPROPERTY(EditAnywhere, SaveGame)
+  bool bAggressive;
+};
+
 UCLASS(Blueprintable)
 class PROTOTYPING_API ATestEnemyManager : public AInfo {
   GENERATED_BODY()
 
 public:
-  ATestEnemyManager() { PrimaryActorTick.bCanEverTick = false; }
+  ATestEnemyManager() {
+    PrimaryActorTick.bCanEverTick = false;
+
+    BehaviourParams.bAggressive = false;
+  }
 
   virtual void BeginPlay() override;
   virtual void Tick(float DeltaTime) override;
@@ -20,6 +32,9 @@ public:
   class APlayerCharacter* PlayerCharacter;
   UPROPERTY(EditAnywhere)
   class ADialogueSystem* DialogueSystem;
+
+  UPROPERTY(EditAnywhere, SaveGame)
+  struct FTestEnemyBehaviorParams BehaviourParams;
 
   UPROPERTY(EditAnywhere)
   int32 Health = 0;

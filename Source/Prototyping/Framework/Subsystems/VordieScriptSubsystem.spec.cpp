@@ -6,29 +6,6 @@
 BEGIN_DEFINE_SPEC(FVordieScriptSubsystemSpec,
                   "Prototyping.VordieScript",
                   EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
-
-inline auto EvaluatedValToString(const VSEvaluatedValue& Val) -> FString {
-  if (Val.IsType<FString>()) return Val.Get<FString>();
-  if (Val.IsType<int32>()) {
-    UE_LOG(LogTemp, Error, TEXT("EvaluatedValToString: int32 value: %d"), Val.Get<int32>());
-    return FString::FromInt(Val.Get<int32>());
-  }
-  if (Val.IsType<float>()) {
-    UE_LOG(LogTemp, Error, TEXT("EvaluatedValToString: float value: %d"), Val.Get<int32>());
-    return FString::SanitizeFloat(Val.Get<float>());
-  }
-  if (Val.IsType<bool>()) return Val.Get<bool>() ? TEXT("true") : TEXT("false");
-  if (Val.IsType<UObjectPtr>()) {
-    const UObjectPtr Obj = Val.Get<UObjectPtr>();
-    return Obj.IsValid() ? Obj->GetName() : TEXT("null");
-  }
-  if (Val.IsType<FStructProperty*>()) {
-    const FStructProperty* StructProp = Val.Get<FStructProperty*>();
-    return StructProp ? StructProp->GetName() : TEXT("null");
-  }
-  return TEXT("Unsupported type");
-}
-
 // Asserts that parsing Script and stringifying the final expression's tree equals Expected,
 // e.g. TestTree(TEXT("5 + 5"), TEXT("(+ 5 5)")).
 void TestTree(const FString& Script, const FString& Expected);
@@ -70,8 +47,7 @@ void FVordieScriptSubsystemSpec::TestEvalBool(const FString& Script, bool bExpec
   UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
   const VSEvaluatedScript Result = Subsystem->EvaluateScript(Script);
   TestTrue(FString::Printf(TEXT("Script '%s' should evaluate successfully."), *Script), Result.bSuccess);
-  if (TestTrue(FString::Printf(TEXT("Script '%s' should produce a bool result, actually produced type %s."), *Script,
-                               *EvaluatedValToString(Result.ReturnValue)),
+  if (TestTrue(FString::Printf(TEXT("Script '%s' should produce a bool result."), *Script),
                Result.ReturnValue.IsType<bool>()))
     TestEqual(
         FString::Printf(TEXT("Script '%s' should evaluate to %s."), *Script, bExpected ? TEXT("true") : TEXT("false")),
@@ -299,6 +275,22 @@ void FVordieScriptSubsystemSpec::Define() {
         TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
         if (TestTrue(TEXT("Result should be a bool."), Result.ReturnValue.IsType<bool>()))
           TestEqual(TEXT("'enemy.Health > 100' should evaluate to true."), Result.ReturnValue.Get<bool>(), true);
+      });
+
+      It("accesses a reflected property of a struct via the dot operator", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>();
+        EnemyManager->BehaviourParams.bAggressive = true;
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.BehaviourParams.bAggressive"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be a bool."), Result.ReturnValue.IsType<bool>()))
+          TestEqual(TEXT("'enemy.BehaviourParams.bAggressive' should evaluate to true."),
+                    Result.ReturnValue.Get<bool>(), true);
       });
     });
   });

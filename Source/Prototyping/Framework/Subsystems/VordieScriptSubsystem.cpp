@@ -32,7 +32,7 @@ inline auto TokenIs(const Token& Token, VSOperandTokenType OpType) -> bool {
 }
 
 inline auto CanEndStatement(const Token& Token) -> bool {
-  return TokenIs(Token, VSOperatorTokenType::RightBrace) || TokenIs(Token, VSOperatorTokenType::RightBrace) ||
+  return TokenIs(Token, VSOperatorTokenType::RightParen) || TokenIs(Token, VSOperatorTokenType::RightBrace) ||
          TokenIs(Token, VSOperatorTokenType::RightSquare);
 }
 inline auto CanStartStatement(const Token& Token) -> bool {
@@ -1060,8 +1060,80 @@ auto UVordieScriptSubsystem::EvalFuncArgsCall(const VSOperation& Op) -> VSEvalua
     return Func(ArgValues);
   } else if (Op.Operands[0].IsType<VSOperation>() &&
              Op.Operands[0].Get<VSOperation>().Operator == VSOperatorTokenType::Dot) {
-    // temp
-    return ToVSEvaluatedValue<int32>(0);
+    const auto& DotRes = EvalDotObjectAccess(Op.Operands[0].Get<VSOperation>());
+    if (!DotRes.IsType<VSUFunctionInstance>())
+      return EnsureReturn<VSEvaluatedValue>(TEXT("Dot operation did not return a function instance."));
+
+    VSUFunctionInstance FuncInst = DotRes.Get<VSUFunctionInstance>();
+    FProperty* ReturnProp = FuncInst.Function->GetReturnProperty();
+    const int32 NumInputParms = FuncInst.Function->NumParms - (ReturnProp ? 1 : 0);
+
+    const auto& ArgsOp = Op.Operands[1].Get<VSOperation>();
+    TArray<VSEvaluatedValue> ArgValues;
+    for (const auto& ArgExpr : ArgsOp.Operands) ArgValues.Push(EvaluateExpression(ArgExpr));
+    if (ArgValues.Num() != NumInputParms)
+      return EnsureReturn<VSEvaluatedValue>(
+          FString::Printf(TEXT("Function '%s' expects %d arguments, but %d were provided."),
+                          *FuncInst.Function->GetName(), NumInputParms, ArgValues.Num()));
+
+    // Allocate the parameter buffer and let the function construct its properties in-place (required for
+    // non-trivial types like FString/arrays/structs), matching the standard UFunction::ProcessEvent contract.
+    uint8* FuncBuffer = (uint8*)FMemory::Malloc(FuncInst.Function->ParmsSize);
+    FuncInst.Function->InitializeStruct(FuncBuffer);
+    auto CleanUpFuncBuffer = [&]() {
+      FuncInst.Function->DestroyStruct(FuncBuffer);
+      FMemory::Free(FuncBuffer);
+    };
+
+    // Pass in params using the buffer.
+    int32 ArgIndex = 0;
+    for (TFieldIterator<FProperty> It(FuncInst.Function); It; ++It) {
+      if (!It->HasAnyPropertyFlags(CPF_Parm) || It->HasAnyPropertyFlags(CPF_ReturnParm)) continue;
+
+      FProperty* Param = *It;
+      if (FStrProperty* StrProp = CastField<FStrProperty>(Param))
+        StrProp->SetPropertyValue_InContainer(FuncBuffer, ArgValues[ArgIndex].Get<FString>());
+      else if (FIntProperty* IntProp = CastField<FIntProperty>(Param))
+        IntProp->SetPropertyValue_InContainer(FuncBuffer, ArgValues[ArgIndex].Get<int32>());
+      else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(Param))
+        FloatProp->SetPropertyValue_InContainer(FuncBuffer, ArgValues[ArgIndex].Get<float>());
+      else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Param))
+        BoolProp->SetPropertyValue_InContainer(FuncBuffer, ArgValues[ArgIndex].Get<bool>());
+      else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Param))
+        ObjectProp->SetObjectPropertyValue_InContainer(FuncBuffer, ArgValues[ArgIndex].Get<UObjectPtr>().Get());
+      else {
+        CleanUpFuncBuffer();
+        return EnsureReturn<VSEvaluatedValue>(
+            FString::Printf(TEXT("Unsupported parameter type: %s"), *Param->GetClass()->GetName()));
+      }
+      ArgIndex++;
+    }
+
+    FuncInst.Caller->ProcessEvent(FuncInst.Function, FuncBuffer);
+
+    if (ReturnProp) {
+      VSEvaluatedValue ReturnValue;
+      if (FStrProperty* StrProp = CastField<FStrProperty>(ReturnProp))
+        ReturnValue.Set<FString>(StrProp->GetPropertyValue_InContainer(FuncBuffer));
+      else if (FIntProperty* IntProp = CastField<FIntProperty>(ReturnProp))
+        ReturnValue.Set<int32>(IntProp->GetPropertyValue_InContainer(FuncBuffer));
+      else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(ReturnProp))
+        ReturnValue.Set<float>(FloatProp->GetPropertyValue_InContainer(FuncBuffer));
+      else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(ReturnProp))
+        ReturnValue.Set<bool>(BoolProp->GetPropertyValue_InContainer(FuncBuffer));
+      else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(ReturnProp))
+        ReturnValue.Set<UObjectPtr>(UObjectPtr(ObjectProp->GetObjectPropertyValue_InContainer(FuncBuffer)));
+      else {
+        CleanUpFuncBuffer();
+        return EnsureReturn<VSEvaluatedValue>(
+            FString::Printf(TEXT("Unsupported return type: %s"), *ReturnProp->GetClass()->GetName()));
+      }
+      CleanUpFuncBuffer();
+      return ReturnValue;
+    }
+
+    CleanUpFuncBuffer();
+    return {};
   } else {
     return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported function call expression."));
   }
@@ -1232,8 +1304,40 @@ auto UVordieScriptSubsystem::EvaluateOperation(const VSOperation& Op) -> VSEvalu
     const auto& res = EvalDotObjectAccess(Op);
     // object.func() = object.func, so we need to call the function if it's a VSUFunctionInstance type.
     if (res.IsType<VSUFunctionInstance>()) {
-      VSUFunctionInstance FuncInstance = res.Get<VSUFunctionInstance>();
-      FuncInstance.Caller->ProcessEvent(FuncInstance.Function, nullptr);
+      VSUFunctionInstance FuncInst = res.Get<VSUFunctionInstance>();
+
+      uint8* FuncBuffer = (uint8*)FMemory::Malloc(FuncInst.Function->ParmsSize);
+      FuncInst.Function->InitializeStruct(FuncBuffer);
+      auto CleanUpFuncBuffer = [&]() {
+        FuncInst.Function->DestroyStruct(FuncBuffer);
+        FMemory::Free(FuncBuffer);
+      };
+
+      FuncInst.Caller->ProcessEvent(FuncInst.Function, FuncBuffer);
+
+      FProperty* ReturnProp = FuncInst.Function->GetReturnProperty();
+      if (ReturnProp) {
+        VSEvaluatedValue ReturnValue;
+        if (FStrProperty* StrProp = CastField<FStrProperty>(ReturnProp))
+          ReturnValue.Set<FString>(StrProp->GetPropertyValue_InContainer(FuncBuffer));
+        else if (FIntProperty* IntProp = CastField<FIntProperty>(ReturnProp))
+          ReturnValue.Set<int32>(IntProp->GetPropertyValue_InContainer(FuncBuffer));
+        else if (FFloatProperty* FloatProp = CastField<FFloatProperty>(ReturnProp))
+          ReturnValue.Set<float>(FloatProp->GetPropertyValue_InContainer(FuncBuffer));
+        else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(ReturnProp))
+          ReturnValue.Set<bool>(BoolProp->GetPropertyValue_InContainer(FuncBuffer));
+        else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(ReturnProp))
+          ReturnValue.Set<UObjectPtr>(UObjectPtr(ObjectProp->GetObjectPropertyValue_InContainer(FuncBuffer)));
+        else {
+          CleanUpFuncBuffer();
+          return EnsureReturn<VSEvaluatedValue>(
+              FString::Printf(TEXT("Unsupported return type: %s"), *ReturnProp->GetClass()->GetName()));
+        }
+        CleanUpFuncBuffer();
+        return ReturnValue;
+      }
+
+      CleanUpFuncBuffer();
       return ToVSEvaluatedValue<FString>(TEXT("<function called>"));
     } else return res;
   }

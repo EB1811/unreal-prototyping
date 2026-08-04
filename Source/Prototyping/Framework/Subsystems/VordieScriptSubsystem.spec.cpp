@@ -389,11 +389,69 @@ void FVordieScriptSubsystemSpec::Define() {
         Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
 
         TestEqual(TEXT("EnemyManager's health should start at 0."), EnemyManager->Health, 0);
-        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.MaxHealth()"));
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.MaxHealth()\n enemy.Health"));
         TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
-        TestEqual(TEXT("'enemy.MaxHealth()' should return '<function called>'."), Result.ReturnValue.Get<FString>(),
-                  TEXT("<function called>"));
+        if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+          TestEqual(TEXT("'enemy.Health' should evaluate to 100 after calling MaxHealth()."),
+                    Result.ReturnValue.Get<int32>(), 100);
         TestEqual(TEXT("'enemy.MaxHealth()' should have reset health to 100."), EnemyManager->Health, 100);
+      });
+
+      It("calls a reflected function of an actor via the dot operator with arguments", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        // AActor::ProcessEvent needs a valid World (GetWorld() != nullptr).
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>(GWorld->PersistentLevel);
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        TestEqual(TEXT("EnemyManager's health should start at 0."), EnemyManager->Health, 0);
+        const VSEvaluatedScript Result =
+            Subsystem->EvaluateScript(TEXT("enemy.MaxHealth()\n enemy.RemoveHealth(10)\n enemy.Health"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+          TestEqual(TEXT("'enemy.Health' should evaluate to 90 after removing 10 health."),
+                    Result.ReturnValue.Get<int32>(), 90);
+        TestEqual(TEXT("'enemy.Health' should be 90 after removing 10 health."), EnemyManager->Health, 90);
+      });
+
+      It("calls a reflected function of an actor via the dot operator with arguments and returns a value", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        // AActor::ProcessEvent needs a valid World (GetWorld() != nullptr).
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>(GWorld->PersistentLevel);
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        TestEqual(TEXT("EnemyManager's health should start at 0."), EnemyManager->Health, 0);
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(
+            TEXT("enemy.MaxHealth()\n enemy.RemoveHealth(enemy.GetHealth() - 10)\n enemy.GetHealth()"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+          TestEqual(TEXT("'enemy.RemoveHealth()' should evaluate to 10 after removing health down to 10."),
+                    Result.ReturnValue.Get<int32>(), 10);
+        TestEqual(TEXT("'enemy.Health' should be 10 after removing health down to 10."), EnemyManager->Health, 10);
+      });
+
+      It("calls a reflected function of an actor via the dot operator in a pipe context", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        // AActor::ProcessEvent needs a valid World (GetWorld() != nullptr).
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>(GWorld->PersistentLevel);
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        TestEqual(TEXT("EnemyManager's health should start at 0."), EnemyManager->Health, 0);
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(
+            TEXT("enemy.MaxHealth()\n enemy.GetHealth() ~> ^ - 10 ~> enemy.RemoveHealth(^)\n enemy.GetHealth()"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+          TestEqual(TEXT("'enemy.RemoveHealth()' should evaluate to 10 after removing health down to 10."),
+                    Result.ReturnValue.Get<int32>(), 10);
+        TestEqual(TEXT("'enemy.Health' should be 10 after removing health down to 10."), EnemyManager->Health, 10);
       });
     });
   });

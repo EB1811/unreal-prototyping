@@ -396,12 +396,11 @@ inline auto ParseTokensToScript(const TArray<Token>& Tokens) -> VSScript {
 inline auto CompareVariants(const VSContainerable& A, const VSContainerable& B) -> bool {
   if (A.GetIndex() != B.GetIndex()) return false;
 
-  Visit(Overload{[&](const auto& ValA) {
-          using T = typename TDecay<decltype(ValA)>::Type;
-          return ValA == B.Get<T>();
-        }},
-        A);
-  return true;
+  return Visit(Overload{[&](const auto& ValA) {
+                 using T = typename TDecay<decltype(ValA)>::Type;
+                 return ValA == B.Get<T>();
+               }},
+               A);
 }
 // template <typename T>
 // concept VSEvaluatedValueTypes =
@@ -479,6 +478,16 @@ inline auto ApplyUnaryOperation<VSEvaluatedMap>(VSOperatorTokenType Op, const VS
   VSEvaluatedValue Res;
   switch (Op) {
     case VSOperatorTokenType::Not: Res.Set<bool>(Val.Num() == 0); break;
+    default: return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
+  }
+  return Res;
+}
+template <>
+inline auto ApplyUnaryOperation<VSUFunctionInstance>(VSOperatorTokenType Op, VSUFunctionInstance const& Val)
+    -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case VSOperatorTokenType::Not: Res.Set<bool>(Val.Function == nullptr); break;
     default: return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported operator for unary operation"));
   }
   return Res;
@@ -640,6 +649,22 @@ inline auto ApplyBinaryOperation<VSEvaluatedArray>(VSOperatorTokenType Op,
       Res.Set<VSEvaluatedArray>(Result);
       break;
     }
+    case VSOperatorTokenType::And: {
+      VSEvaluatedArray Result;
+      for (const auto& LeftElem : LeftVal)
+        if (RightVal.ContainsByPredicate([&](const auto& RightElem) { return CompareVariants(LeftElem, RightElem); }))
+          Result.Add(LeftElem);
+      Res.Set<VSEvaluatedArray>(Result);
+      break;
+    }
+    case VSOperatorTokenType::Or: {
+      VSEvaluatedArray Result = LeftVal;
+      for (const auto& RightElem : RightVal)
+        if (!Result.ContainsByPredicate([&](const auto& LeftElem) { return CompareVariants(LeftElem, RightElem); }))
+          Result.Add(RightElem);
+      Res.Set<VSEvaluatedArray>(Result);
+      break;
+    }
     default: return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
   }
   return Res;
@@ -688,6 +713,35 @@ inline auto ApplyBinaryOperation<VSEvaluatedMap>(VSOperatorTokenType Op,
       Res.Set<VSEvaluatedMap>(Result);
       break;
     }
+    case VSOperatorTokenType::And: {
+      VSEvaluatedMap Result;
+      for (const auto& [Key, LeftValue] : LeftVal) {
+        if (RightVal.Contains(Key)) {
+          const auto& RightValue = RightVal[Key];
+          if (CompareVariants(LeftValue, RightValue)) Result.Add(Key, LeftValue);
+        }
+      }
+      Res.Set<VSEvaluatedMap>(Result);
+      break;
+    }
+    case VSOperatorTokenType::Or: {
+      VSEvaluatedMap Result = LeftVal;
+      for (const auto& [Key, Value] : RightVal) Result.Add(Key, Value);
+      Res.Set<VSEvaluatedMap>(Result);
+      break;
+    }
+    default: return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
+  }
+  return Res;
+}
+template <>
+inline auto ApplyBinaryOperation<VSUFunctionInstance>(VSOperatorTokenType Op,
+                                                      VSUFunctionInstance const& LeftVal,
+                                                      VSUFunctionInstance const& RightVal) -> VSEvaluatedValue {
+  VSEvaluatedValue Res;
+  switch (Op) {
+    case VSOperatorTokenType::Equal: Res.Set<bool>(LeftVal.Function == RightVal.Function); break;
+    case VSOperatorTokenType::NotEqual: Res.Set<bool>(LeftVal.Function != RightVal.Function); break;
     default: return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported operator for binary operation"));
   }
   return Res;
@@ -946,7 +1000,17 @@ auto UVordieScriptSubsystem::EvalTernaryOperation(const VSOperation& Op) -> VSEv
   check(Op.Operands.Num() == 3);
 
   VSEvaluatedValue ConditionVal = EvaluateExpression(Op.Operands[0]);
-  check(ConditionVal.IsType<bool>());
+  if (!ConditionVal.IsType<bool>()) {
+    if (ConditionVal.IsType<FString>()) ConditionVal.Set<bool>(!ConditionVal.Get<FString>().IsEmpty());
+    else if (ConditionVal.IsType<UObjectPtr>()) ConditionVal.Set<bool>(ConditionVal.Get<UObjectPtr>().IsValid());
+    else if (ConditionVal.IsType<VSStructInstance>())
+      ConditionVal.Set<bool>(ConditionVal.Get<VSStructInstance>().ContainerPtr != nullptr);
+    else if (ConditionVal.IsType<VSEvaluatedArray>())
+      ConditionVal.Set<bool>(ConditionVal.Get<VSEvaluatedArray>().Num() > 0);
+    else if (ConditionVal.IsType<VSEvaluatedMap>())
+      ConditionVal.Set<bool>(ConditionVal.Get<VSEvaluatedMap>().Num() > 0);
+    else return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported type for ternary condition."));
+  }
 
   if (ConditionVal.Get<bool>()) return EvaluateExpression(Op.Operands[1]);
   return EvaluateExpression(Op.Operands[2]);
@@ -958,7 +1022,8 @@ auto UVordieScriptSubsystem::EvalPipeOperation(const VSOperation& Op) -> VSEvalu
   GlobalEnviroment.Add(
       TEXT("^"), Visit(Overload{[&](const auto& Val) -> VSEnviromentContext {
                          using T = typename TDecay<decltype(Val)>::Type;
-                         if constexpr (!TypeTests::TAreTypesEqual_V<T, VSStructInstance>) {
+                         if constexpr (!TypeTests::TAreTypesEqual_V<T, VSStructInstance> &&
+                                       !TypeTests::TAreTypesEqual_V<T, VSUFunctionInstance>) {
                            VSEnviromentContext PipeContext;
                            PipeContext.Set<T>(Val);
                            return PipeContext;
@@ -977,23 +1042,29 @@ auto UVordieScriptSubsystem::EvalPipeOperation(const VSOperation& Op) -> VSEvalu
 }
 auto UVordieScriptSubsystem::EvalFuncArgsCall(const VSOperation& Op) -> VSEvaluatedValue {
   check(Op.Operands.Num() == 2);
-  check(Op.Operands[0].IsType<VSOperand>() && Op.Operands[0].Get<VSOperand>().Type == VSOperandTokenType::Identifier);
+  if (Op.Operands[0].IsType<VSOperand>() && Op.Operands[0].Get<VSOperand>().Type == VSOperandTokenType::Identifier) {
+    const FString FuncName = Op.Operands[0].Get<VSOperand>().Value.Get<FString>();
+    if (!GlobalEnviroment.Contains(FName(*FuncName)))
+      return EnsureReturn<VSEvaluatedValue>(FString::Printf(TEXT("Undefined function: %s"), *FuncName));
 
-  const FString FuncName = Op.Operands[0].Get<VSOperand>().Value.Get<FString>();
-  if (!GlobalEnviroment.Contains(FName(*FuncName)))
-    return EnsureReturn<VSEvaluatedValue>(FString::Printf(TEXT("Undefined function: %s"), *FuncName));
+    VSFunction Func = GlobalEnviroment[FName(*FuncName)].Get<VSFunction>();
 
-  VSFunction Func = GlobalEnviroment[FName(*FuncName)].Get<VSFunction>();
+    check(Op.Operands[1].IsType<VSOperation>() &&
+          Op.Operands[1].Get<VSOperation>().Operator == VSOperatorTokenType::Comma &&
+          Op.Operands[1].Get<VSOperation>().Value == "args");
 
-  check(Op.Operands[1].IsType<VSOperation>() &&
-        Op.Operands[1].Get<VSOperation>().Operator == VSOperatorTokenType::Comma &&
-        Op.Operands[1].Get<VSOperation>().Value == "args");
+    const auto& ArgsOp = Op.Operands[1].Get<VSOperation>();
+    TArray<VSEvaluatedValue> ArgValues;
+    for (const auto& ArgExpr : ArgsOp.Operands) ArgValues.Push(EvaluateExpression(ArgExpr));
 
-  const auto& ArgsOp = Op.Operands[1].Get<VSOperation>();
-  TArray<VSEvaluatedValue> ArgValues;
-  for (const auto& ArgExpr : ArgsOp.Operands) ArgValues.Push(EvaluateExpression(ArgExpr));
-
-  return Func(ArgValues);
+    return Func(ArgValues);
+  } else if (Op.Operands[0].IsType<VSOperation>() &&
+             Op.Operands[0].Get<VSOperation>().Operator == VSOperatorTokenType::Dot) {
+    // temp
+    return ToVSEvaluatedValue<int32>(0);
+  } else {
+    return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported function call expression."));
+  }
 }
 // Extracts a single scalar value pointed to by ValuePtr into a VSContainerable, based on Prop's reflected type.
 inline auto ExtractContainerable(FProperty* Prop, const void* ValuePtr) -> VSContainerable {
@@ -1036,6 +1107,16 @@ auto UVordieScriptSubsystem::EvalDotObjectAccess(const VSOperation& Op) -> VSEva
   const auto& Left = EvaluateExpression(Op.Operands[0]);
   check(Left.IsType<UObjectPtr>() || Left.IsType<VSStructInstance>());
   if (const auto& ObjectPtr = Left.TryGet<UObjectPtr>()) {
+    // UFunction
+    UFunction* Func = (*ObjectPtr)->FindFunction(FName(*PropertyName));
+    if (Func) {
+      VSUFunctionInstance FuncInstance;
+      FuncInstance.Function = Func;
+      FuncInstance.Caller = *ObjectPtr;
+      return ToVSEvaluatedValue<VSUFunctionInstance>(FuncInstance);
+    }
+
+    // UProperty
     FProperty* Prop = (*ObjectPtr)->GetClass()->FindPropertyByName(FName(*PropertyName));
     check(Prop);
     // Since the FProperty could be of any type, handle the types explicitly.
@@ -1144,10 +1225,18 @@ auto UVordieScriptSubsystem::EvaluateOperation(const VSOperation& Op) -> VSEvalu
   if (Op.Operator == VSOperatorTokenType::Question) return EvalTernaryOperation(Op);
   // Pipe operator.
   if (Op.Operator == VSOperatorTokenType::Pipe) return EvalPipeOperation(Op);
-  // Function call.
+  // Function call with arguments.
   if (Op.Operator == VSOperatorTokenType::LeftParen && Op.Value == "call") return EvalFuncArgsCall(Op);
-  // Todo: FStructProperty, UObjectPtr, dot operation.
-  if (Op.Operator == VSOperatorTokenType::Dot) return EvalDotObjectAccess(Op);
+  // Dot operator for object access.
+  if (Op.Operator == VSOperatorTokenType::Dot) {
+    const auto& res = EvalDotObjectAccess(Op);
+    // object.func() = object.func, so we need to call the function if it's a VSUFunctionInstance type.
+    if (res.IsType<VSUFunctionInstance>()) {
+      VSUFunctionInstance FuncInstance = res.Get<VSUFunctionInstance>();
+      FuncInstance.Caller->ProcessEvent(FuncInstance.Function, nullptr);
+      return ToVSEvaluatedValue<FString>(TEXT("<function called>"));
+    } else return res;
+  }
 
   return EnsureReturn<VSEvaluatedValue>(FString::Printf(TEXT("Unsupported operation: %s"), *Op.Value));
 }
@@ -1170,7 +1259,9 @@ auto TestScriptTreeGen(const FString& ScriptCode) -> FString {
   return ExpressionToString(ParsedScript.Expressions.Last());
 }
 
-UVordieScriptSubsystem::UVordieScriptSubsystem() {}
+UVordieScriptSubsystem::UVordieScriptSubsystem() {
+  // Add some basic functions to the global environment, e.g., array contains, map contains, etc.
+}
 
 void UVordieScriptSubsystem::RegisterSymbol(FName SymbolName, VSEnviromentContext SymbolValue) {
   if (GlobalEnviroment.Contains(SymbolName)) {

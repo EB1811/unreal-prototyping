@@ -83,12 +83,24 @@ struct VSStructInstance {
   }
   bool operator!=(const VSStructInstance& Other) const { return !(*this == Other); }
 };
+// Caller is needed to use ProcessEvent.
+struct VSUFunctionInstance {
+  UFunction* Function = nullptr;
+  UObjectPtr Caller = nullptr;
+};
 
 using VSContainerable = TVariant<FString, int32, float, bool, UObjectPtr, VSStructInstance>;
 using VSEvaluatedArray = TArray<VSContainerable>;
 using VSEvaluatedMap = TMap<FString, VSContainerable>;
-using VSEvaluatedValue =
-    TVariant<FString, int32, float, bool, UObjectPtr, VSStructInstance, VSEvaluatedArray, VSEvaluatedMap>;
+using VSEvaluatedValue = TVariant<FString,
+                                  int32,
+                                  float,
+                                  bool,
+                                  UObjectPtr,
+                                  VSStructInstance,
+                                  VSEvaluatedArray,
+                                  VSEvaluatedMap,
+                                  VSUFunctionInstance>;
 
 using VSFunction = TFunction<VSEvaluatedValue(const TArray<VSEvaluatedValue>&)>;
 using VSEnviromentContext =

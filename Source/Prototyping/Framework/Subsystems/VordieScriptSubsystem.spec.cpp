@@ -2,6 +2,7 @@
 #include "Misc/AutomationTest.h"
 #include "UObject/UObjectGlobals.h"
 #include "VordieScriptSubsystem.h"
+#include "Engine/Level.h"
 
 BEGIN_DEFINE_SPEC(FVordieScriptSubsystemSpec,
                   "Prototyping.VordieScript",
@@ -15,6 +16,7 @@ void TestEvalInt(const FString& Script, int32 Expected);
 void TestEvalFloat(const FString& Script, float Expected);
 void TestEvalBool(const FString& Script, bool bExpected);
 void TestEvalString(const FString& Script, const FString& Expected);
+void TestEvalArray(const FString& Script, const TArray<int32>& Expected);
 
 END_DEFINE_SPEC(FVordieScriptSubsystemSpec)
 
@@ -32,7 +34,6 @@ void FVordieScriptSubsystemSpec::TestEvalInt(const FString& Script, int32 Expect
     TestEqual(FString::Printf(TEXT("Script '%s' should evaluate to %d."), *Script, Expected),
               Result.ReturnValue.Get<int32>(), Expected);
 }
-
 void FVordieScriptSubsystemSpec::TestEvalFloat(const FString& Script, float Expected) {
   UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
   const VSEvaluatedScript Result = Subsystem->EvaluateScript(Script);
@@ -42,7 +43,6 @@ void FVordieScriptSubsystemSpec::TestEvalFloat(const FString& Script, float Expe
     TestEqual(FString::Printf(TEXT("Script '%s' should evaluate to %f."), *Script, Expected),
               Result.ReturnValue.Get<float>(), Expected);
 }
-
 void FVordieScriptSubsystemSpec::TestEvalBool(const FString& Script, bool bExpected) {
   UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
   const VSEvaluatedScript Result = Subsystem->EvaluateScript(Script);
@@ -53,7 +53,6 @@ void FVordieScriptSubsystemSpec::TestEvalBool(const FString& Script, bool bExpec
         FString::Printf(TEXT("Script '%s' should evaluate to %s."), *Script, bExpected ? TEXT("true") : TEXT("false")),
         Result.ReturnValue.Get<bool>(), bExpected);
 }
-
 void FVordieScriptSubsystemSpec::TestEvalString(const FString& Script, const FString& Expected) {
   UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
   const VSEvaluatedScript Result = Subsystem->EvaluateScript(Script);
@@ -62,6 +61,25 @@ void FVordieScriptSubsystemSpec::TestEvalString(const FString& Script, const FSt
                Result.ReturnValue.IsType<FString>()))
     TestEqual(FString::Printf(TEXT("Script '%s' should evaluate to '%s'."), *Script, *Expected),
               Result.ReturnValue.Get<FString>(), Expected);
+}
+void FVordieScriptSubsystemSpec::TestEvalArray(const FString& Script, const TArray<int32>& Expected) {
+  UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+  const VSEvaluatedScript Result = Subsystem->EvaluateScript(Script);
+  TestTrue(FString::Printf(TEXT("Script '%s' should evaluate successfully."), *Script), Result.bSuccess);
+  if (!TestTrue(FString::Printf(TEXT("Script '%s' should produce an array result."), *Script),
+                Result.ReturnValue.IsType<VSEvaluatedArray>()))
+    return;
+
+  const VSEvaluatedArray& Actual = Result.ReturnValue.Get<VSEvaluatedArray>();
+  if (!TestEqual(FString::Printf(TEXT("Script '%s' should produce an array of size %d."), *Script, Expected.Num()),
+                 Actual.Num(), Expected.Num()))
+    return;
+
+  for (int32 i = 0; i < Expected.Num(); ++i)
+    if (TestTrue(FString::Printf(TEXT("Script '%s' element %d should be an int32."), *Script, i),
+                 Actual[i].IsType<int32>()))
+      TestEqual(FString::Printf(TEXT("Script '%s' element %d should equal %d."), *Script, i, Expected[i]),
+                Actual[i].Get<int32>(), Expected[i]);
 }
 
 void FVordieScriptSubsystemSpec::Define() {
@@ -212,6 +230,13 @@ void FVordieScriptSubsystemSpec::Define() {
       It("accesses the last element", [this]() { TestEvalInt(TEXT("[1, 2, 3][2]"), 3); });
     });
 
+    Describe("Array operations", [this]() {
+      It("returns the intersection of two arrays", [this]() { TestEvalArray(TEXT("[1, 2, 3] && [2, 3, 4]"), {2, 3}); });
+      It("returns the union of two arrays", [this]() { TestEvalArray(TEXT("[1, 2] || [2, 3]"), {1, 2, 3}); });
+      It("checks if array contains a value", [this]() { TestEvalBool(TEXT("!!([1, 2, 3] && [2])"), true); });
+      It("checks if array does not contain a value", [this]() { TestEvalBool(TEXT("!([1, 2, 3] && [4])"), true); });
+    });
+
     Describe("Pipe operator",
              [this]() { It("makes the piped value available as '^'", [this]() { TestEvalInt(TEXT("5 ~> ^"), 5); }); });
 
@@ -231,6 +256,7 @@ void FVordieScriptSubsystemSpec::Define() {
         if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
           TestEqual(TEXT("Registered identifier 'x' should evaluate to 42."), Result.ReturnValue.Get<int32>(), 42);
       });
+
       It("uses an identifier in an expression", [this]() {
         UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
         VSEnviromentContext Value;
@@ -351,6 +377,23 @@ void FVordieScriptSubsystemSpec::Define() {
         TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
         if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
           TestEqual(TEXT("'enemy.Stats{'agility'}' should evaluate to 7."), Result.ReturnValue.Get<int32>(), 7);
+      });
+
+      It("calls a reflected function of an actor via the dot operator", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        // AActor::ProcessEvent needs a valid World (GetWorld() != nullptr).
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>(GWorld->PersistentLevel);
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        TestEqual(TEXT("EnemyManager's health should start at 0."), EnemyManager->Health, 0);
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.MaxHealth()"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        TestEqual(TEXT("'enemy.MaxHealth()' should return '<function called>'."), Result.ReturnValue.Get<FString>(),
+                  TEXT("<function called>"));
+        TestEqual(TEXT("'enemy.MaxHealth()' should have reset health to 100."), EnemyManager->Health, 100);
       });
     });
   });

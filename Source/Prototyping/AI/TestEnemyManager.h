@@ -50,4 +50,12 @@ public:
 
   UPROPERTY(EditAnywhere)
   TMap<FString, int32> Stats;
+
+  // CallInEditor is required so AActor::ProcessEvent doesn't silently skip the call when the actor
+  // isn't in an initialized game world (e.g. NewObject'd directly in an automation test).
+  UFUNCTION(BlueprintCallable, CallInEditor)
+  void MaxHealth() { Health = 100; }
+
+  UFUNCTION(BlueprintCallable, CallInEditor)
+  void RemoveHealth(int32 Damage) { Health -= Damage; }
 };

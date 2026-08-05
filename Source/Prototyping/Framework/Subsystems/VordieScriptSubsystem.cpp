@@ -5,6 +5,7 @@
 #include "Misc/AssertionMacros.h"
 #include "Misc/TVariant.h"
 #include "UObject/UnrealType.h"
+#include "HAL/IConsoleManager.h"
 
 template <typename T>
 inline auto EnsureReturn(const FString& Message) -> T {
@@ -1393,3 +1394,38 @@ auto UVordieScriptSubsystem::EvaluateScript(const FString& ScriptCode) -> VSEval
   VSEvaluatedScript Result = {true, "", LastResult.GetIndex() != 0 ? true : false, LastResult};
   return Result;
 }
+
+static FAutoConsoleCommandWithWorldAndArgs C_EvaluateScriptCommand(
+    TEXT("VS.EvaluateScript"),
+    TEXT("Evaluates a VordieScript expression and logs the result."),
+    FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) {
+      if (Args.Num() == 0) {
+        UE_LOG(LogTemp, Error, TEXT("No script provided for evaluation."));
+        return;
+      }
+
+      FString ScriptCode = FString::Join(Args, TEXT(" "));
+      UVordieScriptSubsystem* VSSubsystem = World->GetSubsystem<UVordieScriptSubsystem>();
+      if (!VSSubsystem) {
+        UE_LOG(LogTemp, Error, TEXT("VordieScriptSubsystem is not available."));
+        return;
+      }
+
+      VSEvaluatedScript EvalResult = VSSubsystem->EvaluateScript(ScriptCode);
+      if (EvalResult.ReturnValue.IsType<FString>()) {
+        UE_LOG(LogTemp, Log, TEXT("Script Result: %s"), *EvalResult.ReturnValue.Get<FString>());
+      } else if (EvalResult.ReturnValue.IsType<int32>()) {
+        UE_LOG(LogTemp, Log, TEXT("Script Result: %d"), EvalResult.ReturnValue.Get<int32>());
+      } else if (EvalResult.ReturnValue.IsType<float>()) {
+        UE_LOG(LogTemp, Log, TEXT("Script Result: %f"), EvalResult.ReturnValue.Get<float>());
+      } else if (EvalResult.ReturnValue.IsType<bool>()) {
+        UE_LOG(LogTemp, Log, TEXT("Script Result: %s"),
+               EvalResult.ReturnValue.Get<bool>() ? TEXT("true") : TEXT("false"));
+      } else if (EvalResult.ReturnValue.IsType<UObjectPtr>()) {
+        UObjectPtr ObjPtr = EvalResult.ReturnValue.Get<UObjectPtr>();
+        UE_LOG(LogTemp, Log, TEXT("Script Result: UObjectPtr to %s"),
+               ObjPtr.IsValid() ? *ObjPtr->GetName() : TEXT("null"));
+      } else {
+        UE_LOG(LogTemp, Log, TEXT("Script Result: <unsupported type>"));
+      }
+    }));

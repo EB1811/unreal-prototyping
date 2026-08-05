@@ -12,6 +12,14 @@
 #include "Prototyping/Player/PlayerCharacter.h"
 #include "Prototyping/UI/InGameControlHUD.h"
 #include "Prototyping/AI/TestEnemyManager.h"
+#include "Prototyping/Framework/Subsystems/VordieScriptSubsystem.h"
+
+template <typename T>
+inline auto ToVSEnviromentContext(T Val) -> VSEnviromentContext {
+  VSEnviromentContext Res;
+  Res.Set<T>(Val);
+  return Res;
+}
 
 AInGameGameMode::AInGameGameMode() {}
 
@@ -28,6 +36,12 @@ void AInGameGameMode::BeginPlay() {
   DialogueSystem = GetWorld()->SpawnActor<ADialogueSystem>(DialogueSystemClass);
 
   TestEnemyManager = GetWorld()->SpawnActor<ATestEnemyManager>(TestEnemyManagerClass);
+
+  UVordieScriptSubsystem* VordieScriptSubsystem = GetWorld()->GetSubsystem<UVordieScriptSubsystem>();
+  VordieScriptSubsystem->RegisterSymbol(FName(TEXT("PlayerCharacter")),
+                                        ToVSEnviromentContext(UObjectPtr(PlayerCharacter)));
+  VordieScriptSubsystem->RegisterSymbol(FName(TEXT("TestEnemyManager")),
+                                        ToVSEnviromentContext(UObjectPtr(TestEnemyManager)));
 
   PlayerCharacter->DialogueSystem = DialogueSystem;
 

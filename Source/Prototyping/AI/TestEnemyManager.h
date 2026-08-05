@@ -17,6 +17,14 @@ struct FTestEnemyBehaviorParams {
   TArray<int32> Levels;
 };
 
+USTRUCT(BlueprintType)
+struct FTestEnemyStats {
+  GENERATED_BODY()
+
+  UPROPERTY(EditAnywhere)
+  int32 Strength;
+};
+
 UCLASS(Blueprintable)
 class PROTOTYPING_API ATestEnemyManager : public AInfo {
   GENERATED_BODY()
@@ -49,7 +57,10 @@ public:
   FString Name;
 
   UPROPERTY(EditAnywhere)
-  TMap<FString, int32> Stats;
+  TMap<FString, int32> StatsMap;
+
+  UPROPERTY(EditAnywhere)
+  FTestEnemyStats EnemyStats;
 
   // CallInEditor is required so AActor::ProcessEvent doesn't silently skip the call when the actor
   // isn't in an initialized game world (e.g. NewObject'd directly in an automation test).
@@ -61,4 +72,7 @@ public:
 
   UFUNCTION(BlueprintCallable, CallInEditor)
   int32 GetHealth() { return Health; };
+
+  UFUNCTION(BlueprintCallable, CallInEditor)
+  FTestEnemyStats GetStats() { return EnemyStats; };
 };

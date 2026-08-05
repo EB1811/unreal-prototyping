@@ -237,8 +237,11 @@ void FVordieScriptSubsystemSpec::Define() {
       It("checks if array does not contain a value", [this]() { TestEvalBool(TEXT("!([1, 2, 3] && [4])"), true); });
     });
 
-    Describe("Pipe operator",
-             [this]() { It("makes the piped value available as '^'", [this]() { TestEvalInt(TEXT("5 ~> ^"), 5); }); });
+    Describe("Pipe operator", [this]() {
+      It("makes the piped value available as '^'", [this]() { TestEvalInt(TEXT("5 ~> ^"), 5); });
+      It("can use an array literal as the piped value", [this]() { TestEvalInt(TEXT("[1, 2, 3] ~> ^[0] + ^[1]"), 3); });
+      It("evaluates the pipe expression first", [this]() { TestEvalInt(TEXT("5 + 2 ~> ^ + 10"), 17); });
+    });
 
     Describe("Dot operator on numbers", [this]() {
       It("concatenates two integers into a string", [this]() { TestEvalFloat(TEXT("1.2"), 1.2f); });
@@ -367,16 +370,16 @@ void FVordieScriptSubsystemSpec::Define() {
       It("accesses a value of a reflected map property of an actor via the dot operator", [this]() {
         UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
         ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>();
-        EnemyManager->Stats = {{TEXT("strength"), 5}, {TEXT("agility"), 7}};
+        EnemyManager->StatsMap = {{TEXT("strength"), 5}, {TEXT("agility"), 7}};
 
         VSEnviromentContext Value;
         Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
         Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
 
-        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.Stats{'agility'}"));
+        const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.StatsMap{'agility'}"));
         TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
         if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
-          TestEqual(TEXT("'enemy.Stats{'agility'}' should evaluate to 7."), Result.ReturnValue.Get<int32>(), 7);
+          TestEqual(TEXT("'enemy.StatsMap{'agility'}' should evaluate to 7."), Result.ReturnValue.Get<int32>(), 7);
       });
 
       It("calls a reflected function of an actor via the dot operator", [this]() {
@@ -434,6 +437,24 @@ void FVordieScriptSubsystemSpec::Define() {
                     Result.ReturnValue.Get<int32>(), 10);
         TestEqual(TEXT("'enemy.Health' should be 10 after removing health down to 10."), EnemyManager->Health, 10);
       });
+
+      It("a reflected function of an actor can return a struct and access its properties via the dot operator",
+         [this]() {
+           UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+           // AActor::ProcessEvent needs a valid World (GetWorld() != nullptr).
+           ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>(GWorld->PersistentLevel);
+           EnemyManager->EnemyStats = FTestEnemyStats{5};
+
+           VSEnviromentContext Value;
+           Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+           Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+           const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.GetStats().Strength * 2"));
+           TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+           if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+             TestEqual(TEXT("'enemy.GetStats().Strength * 2' should evaluate to 10."), Result.ReturnValue.Get<int32>(),
+                       10);
+         });
 
       It("calls a reflected function of an actor via the dot operator in a pipe context", [this]() {
         UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();

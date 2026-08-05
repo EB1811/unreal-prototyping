@@ -1123,7 +1123,10 @@ auto UVordieScriptSubsystem::EvalFuncArgsCall(const VSOperation& Op) -> VSEvalua
         ReturnValue.Set<bool>(BoolProp->GetPropertyValue_InContainer(FuncBuffer));
       else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(ReturnProp))
         ReturnValue.Set<UObjectPtr>(UObjectPtr(ObjectProp->GetObjectPropertyValue_InContainer(FuncBuffer)));
-      else {
+      else if (FStructProperty* StructProp = CastField<FStructProperty>(ReturnProp)) {
+        return ToVSEvaluatedValue<VSStructInstance>(
+            VSStructInstance{StructProp, StructProp->ContainerPtrToValuePtr<void>(FuncBuffer)});
+      } else {
         CleanUpFuncBuffer();
         return EnsureReturn<VSEvaluatedValue>(
             FString::Printf(TEXT("Unsupported return type: %s"), *ReturnProp->GetClass()->GetName()));
@@ -1204,12 +1207,12 @@ auto UVordieScriptSubsystem::EvalDotObjectAccess(const VSOperation& Op) -> VSEva
     } else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Prop)) {
       bool PropVal = BoolProp->GetPropertyValue_InContainer(ObjectPtr->Get());
       return ToVSEvaluatedValue<bool>(PropVal);
-    } else if (FStructProperty* StructProp = CastField<FStructProperty>(Prop)) {
-      return ToVSEvaluatedValue<VSStructInstance>(
-          VSStructInstance{StructProp, StructProp->ContainerPtrToValuePtr<void>(ObjectPtr->Get())});
     } else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop)) {
       UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(ObjectPtr->Get());
       return ToVSEvaluatedValue<UObjectPtr>(UObjectPtr(PropVal));
+    } else if (FStructProperty* StructProp = CastField<FStructProperty>(Prop)) {
+      return ToVSEvaluatedValue<VSStructInstance>(
+          VSStructInstance{StructProp, StructProp->ContainerPtrToValuePtr<void>(ObjectPtr->Get())});
     } else if (FArrayProperty* ArrProp = CastField<FArrayProperty>(Prop)) {
       return ExtractArrayProperty(ArrProp, ArrProp->ContainerPtrToValuePtr<void>(ObjectPtr->Get()));
     } else if (FMapProperty* MapProp = CastField<FMapProperty>(Prop)) {
@@ -1235,12 +1238,12 @@ auto UVordieScriptSubsystem::EvalDotObjectAccess(const VSOperation& Op) -> VSEva
     } else if (FBoolProperty* BoolProp = CastField<FBoolProperty>(Prop)) {
       bool PropVal = BoolProp->GetPropertyValue_InContainer(ContainerPtr);
       return ToVSEvaluatedValue<bool>(PropVal);
-    } else if (FStructProperty* NestedStructProp = CastField<FStructProperty>(Prop)) {
-      return ToVSEvaluatedValue<VSStructInstance>(
-          VSStructInstance{NestedStructProp, NestedStructProp->ContainerPtrToValuePtr<void>(ContainerPtr)});
     } else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(Prop)) {
       UObject* PropVal = ObjectProp->GetObjectPropertyValue_InContainer(ContainerPtr);
       return ToVSEvaluatedValue<UObjectPtr>(UObjectPtr(PropVal));
+    } else if (FStructProperty* NestedStructProp = CastField<FStructProperty>(Prop)) {
+      return ToVSEvaluatedValue<VSStructInstance>(
+          VSStructInstance{NestedStructProp, NestedStructProp->ContainerPtrToValuePtr<void>(ContainerPtr)});
     } else if (FArrayProperty* ArrProp = CastField<FArrayProperty>(Prop)) {
       return ExtractArrayProperty(ArrProp, ArrProp->ContainerPtrToValuePtr<void>(ContainerPtr));
     } else if (FMapProperty* MapProp = CastField<FMapProperty>(Prop)) {
@@ -1328,7 +1331,10 @@ auto UVordieScriptSubsystem::EvaluateOperation(const VSOperation& Op) -> VSEvalu
           ReturnValue.Set<bool>(BoolProp->GetPropertyValue_InContainer(FuncBuffer));
         else if (FObjectProperty* ObjectProp = CastField<FObjectProperty>(ReturnProp))
           ReturnValue.Set<UObjectPtr>(UObjectPtr(ObjectProp->GetObjectPropertyValue_InContainer(FuncBuffer)));
-        else {
+        else if (FStructProperty* StructProp = CastField<FStructProperty>(ReturnProp)) {
+          return ToVSEvaluatedValue<VSStructInstance>(
+              VSStructInstance{StructProp, StructProp->ContainerPtrToValuePtr<void>(FuncBuffer)});
+        } else {
           CleanUpFuncBuffer();
           return EnsureReturn<VSEvaluatedValue>(
               FString::Printf(TEXT("Unsupported return type: %s"), *ReturnProp->GetClass()->GetName()));

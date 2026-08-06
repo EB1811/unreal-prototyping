@@ -129,6 +129,28 @@ public:
 
   auto EvaluateScript(const FString& ScriptCode) -> VSEvaluatedScript;
 
+  template <typename T>
+  inline auto CastVSEvaluatedValueTo(const VSEvaluatedValue& Val) -> T {
+    if (Val.IsType<T>()) return Val.Get<T>();
+    else {
+      ensureAlwaysMsgf(false, TEXT("VSEvaluatedValue is not of type %s"), *TNameOf<T>::GetName());
+      return T();
+    }
+  }
+  template <>
+  inline auto CastVSEvaluatedValueTo<bool>(const VSEvaluatedValue& Val) -> bool {
+    if (Val.IsType<bool>()) return Val.Get<bool>();
+    else if (Val.IsType<FString>()) return !Val.Get<FString>().IsEmpty();
+    else if (Val.IsType<UObjectPtr>()) return Val.Get<UObjectPtr>().IsValid();
+    else if (Val.IsType<VSStructInstance>()) return Val.Get<VSStructInstance>().ContainerPtr != nullptr;
+    else if (Val.IsType<VSEvaluatedArray>()) return Val.Get<VSEvaluatedArray>().Num() > 0;
+    else if (Val.IsType<VSEvaluatedMap>()) return Val.Get<VSEvaluatedMap>().Num() > 0;
+    else {
+      ensureAlwaysMsgf(false, TEXT("VSEvaluatedValue is not of type bool or castable to bool"));
+      return false;
+    };
+  }
+
 private:
   auto EvaluateOperand(const VSOperand& Op) -> VSEvaluatedValue;
 

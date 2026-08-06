@@ -1001,17 +1001,7 @@ auto UVordieScriptSubsystem::EvalTernaryOperation(const VSOperation& Op) -> VSEv
   check(Op.Operands.Num() == 3);
 
   VSEvaluatedValue ConditionVal = EvaluateExpression(Op.Operands[0]);
-  if (!ConditionVal.IsType<bool>()) {
-    if (ConditionVal.IsType<FString>()) ConditionVal.Set<bool>(!ConditionVal.Get<FString>().IsEmpty());
-    else if (ConditionVal.IsType<UObjectPtr>()) ConditionVal.Set<bool>(ConditionVal.Get<UObjectPtr>().IsValid());
-    else if (ConditionVal.IsType<VSStructInstance>())
-      ConditionVal.Set<bool>(ConditionVal.Get<VSStructInstance>().ContainerPtr != nullptr);
-    else if (ConditionVal.IsType<VSEvaluatedArray>())
-      ConditionVal.Set<bool>(ConditionVal.Get<VSEvaluatedArray>().Num() > 0);
-    else if (ConditionVal.IsType<VSEvaluatedMap>())
-      ConditionVal.Set<bool>(ConditionVal.Get<VSEvaluatedMap>().Num() > 0);
-    else return EnsureReturn<VSEvaluatedValue>(TEXT("Unsupported type for ternary condition."));
-  }
+  if (!ConditionVal.IsType<bool>()) ConditionVal.Set<bool>(CastVSEvaluatedValueTo<bool>(ConditionVal));
 
   if (ConditionVal.Get<bool>()) return EvaluateExpression(Op.Operands[1]);
   return EvaluateExpression(Op.Operands[2]);

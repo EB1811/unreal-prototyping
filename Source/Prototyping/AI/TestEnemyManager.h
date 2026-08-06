@@ -75,4 +75,7 @@ public:
 
   UFUNCTION(BlueprintCallable, CallInEditor)
   FTestEnemyStats GetStats() { return EnemyStats; };
+
+  UFUNCTION(BlueprintCallable, CallInEditor)
+  FTestEnemyStats GetNewStats(int32 Strength) { return FTestEnemyStats{Strength}; };
 };

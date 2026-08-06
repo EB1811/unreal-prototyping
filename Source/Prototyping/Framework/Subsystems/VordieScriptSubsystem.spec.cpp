@@ -210,6 +210,9 @@ void FVordieScriptSubsystemSpec::Define() {
     Describe("Ternary operator", [this]() {
       It("evaluates the true branch", [this]() { TestEvalInt(TEXT("true ? 1 : 2"), 1); });
       It("evaluates the false branch", [this]() { TestEvalInt(TEXT("false ? 1 : 2"), 2); });
+      It("evaluates a nested ternary expression", [this]() { TestEvalInt(TEXT("false ? 1 : true ? 2 : 3"), 2); });
+      It("can coerce some expressions to boolean for the condition",
+         [this]() { TestEvalInt(TEXT("[1] ? 5 : -5"), 5); });
     });
 
     Describe("String operations", [this]() {
@@ -454,6 +457,23 @@ void FVordieScriptSubsystemSpec::Define() {
            if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
              TestEqual(TEXT("'enemy.GetStats().Strength * 2' should evaluate to 10."), Result.ReturnValue.Get<int32>(),
                        10);
+         });
+
+      It("a reflected function of an actor can return a new free struct and access its properties via the dot operator",
+         [this]() {
+           UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+           // AActor::ProcessEvent needs a valid World (GetWorld() != nullptr).
+           ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>(GWorld->PersistentLevel);
+
+           VSEnviromentContext Value;
+           Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+           Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+           const VSEvaluatedScript Result = Subsystem->EvaluateScript(TEXT("enemy.GetNewStats(10).Strength * 2"));
+           TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+           if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+             TestEqual(TEXT("'enemy.GetNewStats(10).Strength * 2' should evaluate to 20."),
+                       Result.ReturnValue.Get<int32>(), 20);
          });
 
       It("calls a reflected function of an actor via the dot operator in a pipe context", [this]() {

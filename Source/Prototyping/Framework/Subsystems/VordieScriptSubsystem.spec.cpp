@@ -244,6 +244,7 @@ void FVordieScriptSubsystemSpec::Define() {
       It("makes the piped value available as '^'", [this]() { TestEvalInt(TEXT("5 ~> ^"), 5); });
       It("can use an array literal as the piped value", [this]() { TestEvalInt(TEXT("[1, 2, 3] ~> ^[0] + ^[1]"), 3); });
       It("evaluates the pipe expression first", [this]() { TestEvalInt(TEXT("5 + 2 ~> ^ + 10"), 17); });
+      It("can use a label for the piped value", [this]() { TestEvalInt(TEXT("5 ~> ^x + 10"), 15); });
     });
 
     Describe("Dot operator on numbers", [this]() {
@@ -493,6 +494,24 @@ void FVordieScriptSubsystemSpec::Define() {
           TestEqual(TEXT("'enemy.RemoveHealth()' should evaluate to 10 after removing health down to 10."),
                     Result.ReturnValue.Get<int32>(), 10);
         TestEqual(TEXT("'enemy.Health' should be 10 after removing health down to 10."), EnemyManager->Health, 10);
+      });
+
+      It("a pipe context can be an array literal with reflected properties", [this]() {
+        UVordieScriptSubsystem* Subsystem = NewObject<UVordieScriptSubsystem>();
+        // AActor::ProcessEvent needs a valid World (GetWorld() != nullptr).
+        ATestEnemyManager* EnemyManager = NewObject<ATestEnemyManager>(GWorld->PersistentLevel);
+
+        VSEnviromentContext Value;
+        Value.Set<UObjectPtr>(UObjectPtr(EnemyManager));
+        Subsystem->RegisterSymbol(FName(TEXT("enemy")), Value);
+
+        TestEqual(TEXT("EnemyManager's health should start at 0."), EnemyManager->Health, 0);
+        const VSEvaluatedScript Result =
+            Subsystem->EvaluateScript(TEXT("enemy.MaxHealth()\n [enemy.GetNewStats(20).Strength, enemy.GetHealth()] ~> "
+                                           "^[0] + ^[1]"));
+        TestTrue(TEXT("Script should evaluate successfully."), Result.bSuccess);
+        if (TestTrue(TEXT("Result should be an int32."), Result.ReturnValue.IsType<int32>()))
+          TestEqual(TEXT("'^Stats[0] + ^Health[1]' should evaluate to 120"), Result.ReturnValue.Get<int32>(), 120);
       });
     });
   });

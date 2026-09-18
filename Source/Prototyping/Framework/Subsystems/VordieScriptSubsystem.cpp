@@ -146,6 +146,10 @@ auto Tokenize(const FString& Code) -> TArray<Token> {
       } else {
         return EnsureReturn<TArray<Token>>(FString::Printf(TEXT("Unknown character: %c"), C));
       }
+    } else if (C == '^') {
+      Tokens.Push(ToToken(VSOperandTokenType::PipeVar, "^"));
+      i++;
+      while (i < Code.Len() && (FChar::IsAlnum(Code[i]) || Code[i] == '_')) i++;
     } else {
       switch (C) {
         case '(': Tokens.Push(ToToken(VSOperatorTokenType::LeftParen, "(")); break;
@@ -158,7 +162,6 @@ auto Tokenize(const FString& Code) -> TArray<Token> {
         case '.': Tokens.Push(ToToken(VSOperatorTokenType::Dot, ".")); break;
         case '?': Tokens.Push(ToToken(VSOperatorTokenType::Question, "?")); break;
         case ':': Tokens.Push(ToToken(VSOperatorTokenType::Colon, ":")); break;
-        case '^': Tokens.Push(ToToken(VSOperandTokenType::PipeVar, "^")); break;
         case '*': Tokens.Push(ToToken(VSOperatorTokenType::Times, "*")); break;
         case '/': Tokens.Push(ToToken(VSOperatorTokenType::Divide, "/")); break;
         case '+': Tokens.Push(ToToken(VSOperatorTokenType::Plus, "+")); break;
